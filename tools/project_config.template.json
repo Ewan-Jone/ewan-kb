@@ -1,0 +1,41 @@
+{
+  "_说明": "这是知识库的核心配置文件。域（domains）由 ewankb extract 自动从后端代码发现，无需在此配置。",
+
+  "project_name": "【填写项目中文名，如：国际物流业务知识库】",
+  "system_name": "【填写系统名称，用于 AI prompt 中，如：国际物流系统】",
+
+  "confluence": {
+    "_说明": "Confluence 根页面配置。root_page_ids 是爬虫的入口页面 ID 列表",
+    "root_page_ids": ["PAGE_ID_1", "PAGE_ID_2"],
+    "root_page_desc": {
+      "PAGE_ID_1": "【页面描述，如：产品文档主目录】",
+      "PAGE_ID_2": "【页面描述，如：研发类文档】"
+    }
+  },
+
+  "model": "claude-haiku-4-5-20251001",
+
+  "_doc_type_rules_说明": "标准文档类型：需求文档、接口文档、业务规则、测试用例、研发设计文档、其他。",
+  "doc_type_rules": [
+    {"type": "业务规则",    "patterns": ["规则", "规范", "校验", "标准"]},
+    {"type": "需求文档",    "patterns": ["需求", "方案", "PRD", "功能设计", "功能说明", "改造", "功能点", "功能规范", "^(新增|查询|删除|导入|导出|编辑|获取|创建|更新|分页|设置|保存|启用|停用|清空|搜索|列表|详情|统计)", "(新增|查询|删除|导入|导出|编辑|获取|创建|更新)[\\u4e00-\\u9fa5]{1,15}$"]},
+    {"type": "接口文档",    "patterns": ["接口", "API", "POST", "GET", "REST", "接口文档", "接口设计", "接口规范", "接口说明"]},
+    {"type": "测试用例",    "patterns": ["测试", "用例", "test", "验收"]},
+    {"type": "研发设计文档", "patterns": ["设计", "详细设计", "技术设计", "技术方案", "设计文档", "开发设计", "架构"]}
+  ],
+
+  "code_structure": {
+    "_说明": "代码仓库的目录约定",
+    "atomic_service_pattern": "atomic-service/{module}-atomic-service",
+    "java_package_prefix": "com.your.company"
+  },
+
+  "system_fields": [
+    "id", "delete_flag", "create_time", "update_time",
+    "create_user_code", "update_user_code", "version",
+    "tenant_code", "remark"
+  ],
+
+  "skip_domains": [],
+  "skip_doc_types_for_enrich": []
+}

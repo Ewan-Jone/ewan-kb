@@ -1,0 +1,19 @@
+{
+  "_说明": "代码仓库配置。使用前请复制为 repos.json 并填写实际值。",
+  "output_dir": "repos",
+  "default_branch": "master",
+  "repos": [
+    {
+      "name": "【仓库短名，如 backend-service】",
+      "url": "https://your-git-server.com/group/repo-name.git",
+      "branch": "【生产分支名，如 release/prod 或 master】",
+      "description": "【仓库描述，如：后端服务】"
+    },
+    {
+      "name": "【前端仓库短名，如 fe-web】",
+      "url": "https://your-git-server.com/group/fe-repo.git",
+      "branch": "release/prod",
+      "description": "【前端】"
+    }
+  ]
+}

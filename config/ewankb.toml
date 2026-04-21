@@ -1,0 +1,63 @@
+# Ewan-kb global configuration
+# Place at ~/.config/ewankb/ewankb.toml on Linux/macOS
+# or %APPDATA%/ewankb/ewankb.toml on Windows
+
+[kb]
+# Default knowledge base directory when EWANKB_DIR is not set
+# default_dir = "/path/to/your/default-kb"
+
+[graph]
+# Default traversal strategy: "bfs" or "dfs"
+default_traversal = "bfs"
+
+# Max nodes to traverse before truncating
+max_nodes = 100
+
+# Approximate chars per token (for budget estimation)
+chars_per_token = 4
+
+# Cache directory for file hashes
+cache_dir = ".cache"
+
+[api]
+# Anthropic API key (or set ANTHROPIC_API_KEY env var)
+# api_key = "sk-ant-..."
+
+# Base URL for Anthropic API (for proxies)
+# base_url = "https://api.anthropic.com"
+
+# Default model for semantic extraction
+default_model = "claude-haiku-4-5-20251001"
+
+# Max tokens for semantic extraction per file
+extraction_max_tokens = 4096
+
+[build]
+# Number of parallel workers for AST extraction
+parallel_workers = 4
+
+# Skip semantic pass (AST only, no API calls)
+# skip_semantic = false
+
+# Incremental mode: only rebuild changed files
+incremental = true
+
+[query]
+# Default max tokens for query results
+default_max_tokens = 8192
+
+# Include node type in output
+show_node_type = true
+
+# Include trust tags in output
+show_trust_tags = false
+
+[community]
+# Algorithm: "leiden" (default), "louvain"
+algorithm = "leiden"
+
+# Max community size as fraction of total nodes
+max_community_fraction = 0.25
+
+# Min community size
+min_community_size = 3

@@ -1,0 +1,41 @@
+{
+  "_说明": "Ewan-kb 项目配置。域（domains）由 ewankb extract 自动从后端代码发现，无需在此配置。",
+
+  "project_name": "【填写项目中文名，如：国际物流业务知识库】",
+  "system_name": "【填写系统名称，用于 AI prompt 中，如：国际物流系统】",
+
+  "_model_说明": "大模型配置。优先使用此处配置，未填则回退到 ewankb.toml 或环境变量。",
+  "api_key": "",
+  "base_url": "",
+  "model": "",
+
+  "_doc_type_rules_说明": "文档类型识别规则。标准类型：需求文档、接口文档、业务规则、测试用例、研发设计文档、其他。",
+  "doc_type_rules": [
+    {"type": "业务规则",    "patterns": ["规则", "规范", "校验", "标准"]},
+    {"type": "需求文档",    "patterns": ["需求", "方案", "PRD", "功能设计", "功能说明"]},
+    {"type": "接口文档",    "patterns": ["接口", "API", "POST", "GET", "REST"]},
+    {"type": "测试用例",    "patterns": ["测试", "用例", "test", "验收"]},
+    {"type": "研发设计文档", "patterns": ["设计", "详细设计", "技术方案", "架构", "开发设计"]}
+  ],
+
+  "_source_dirs_说明": "源代码目录，相对于 source/repos/ 的路径（留空则不扫描代码）。",
+  "source_dirs": [],
+
+  "_code_structure_说明": "代码仓库的目录约定。",
+  "code_structure": {
+    "java_package_prefix": "com.example",
+    "atomic_service_pattern": "atomic-service/{module}-atomic-service"
+  },
+
+  "_skip_domains_说明": "gen_domain_overview.py 等脚本跳过这些域（不生成概览）。",
+  "skip_domains": [],
+
+  "_skip_doc_types_for_enrich_说明": "enrich_kb.py 跳过这些文档类型。",
+  "skip_doc_types_for_enrich": [],
+
+  "_system_fields_说明": "DB schema 提取时过滤的通用系统字段。",
+  "system_fields": ["id", "delete_flag", "create_time", "update_time", "create_user_code", "update_user_code", "version", "tenant_code", "remark"],
+
+  "_extraction_prompts_说明": "各文档类型的提炼 prompt。留空使用内置默认 prompt。",
+  "extraction_prompts": {}
+}

@@ -1,0 +1,44 @@
+{
+  "_说明": "域发现时从 Java 包路径中提取 segment 的停用词配置。segment 是包路径中代表业务域的片段（如 contract、customer、order）。提取逻辑会逐个检查包路径片段，跳过所有在停用词表中的词，第一个不在表中的词即为 segment。",
+
+  "segment_stopwords": {
+    "_说明": "技术层 + 框架 + 项目名等无业务含义的词。匹配到这些词时直接跳过，不作为域标识。",
+    "words": [
+      "api", "controller", "service", "impl", "application",
+      "app", "apps", "domain", "model", "entity", "dto", "vo", "request", "response",
+      "config", "constants", "util", "utils", "helper", "common", "core", "base",
+      "entry", "client", "adapter", "converter", "facade", "handler", "processor",
+      "manager", "provider", "repository", "mapper", "dao", "query", "command",
+      "event", "listener", "filter", "interceptor", "aspect", "advice",
+      "enums", "exception", "error", "result", "context", "params",
+      "body", "header", "path", "form", "file", "upload", "download",
+      "logistics", "crm",
+      "com", "org", "io", "java", "src", "main", "test",
+      "resources", "static", "public", "private", "internal", "external",
+      "generated", "auto", "default", "none", "null", "void",
+      "encrypt", "smf", "framework", "cache"
+    ]
+  },
+
+  "package_wrappers": {
+    "_说明": "包路径中的技术分层目录名。这些词本身不是域标识，但它们后面紧跟的词通常是。例如 rest.contract 中 rest 是 wrapper，contract 是 segment。匹配到 wrapper 时跳过它继续往后找。",
+    "words": [
+      "feign", "rest", "remote", "http", "soap",
+      "job", "jobs", "batch", "schedule", "scheduled"
+    ]
+  },
+
+  "generic_noise": {
+    "_说明": "通用名词，单独出现时没有业务区分度，不适合作为域标识。例如 info、detail、list 这类词在任何域中都可能出现。",
+    "words": [
+      "info", "module", "modules", "component", "components", "common",
+      "detail", "details", "change", "list", "page", "other", "index",
+      "log", "message",
+      "main", "base", "core", "util", "utils", "config", "configuration",
+      "data", "local", "global", "system", "public", "private", "init",
+      "format", "compare", "generate", "snapshot", "stream", "monitor",
+      "resource", "storage", "portal", "virtual", "key", "source",
+      "template", "history", "more", "record", "security", "manage"
+    ]
+  }
+}

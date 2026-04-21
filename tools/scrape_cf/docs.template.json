@@ -1,0 +1,10 @@
+{
+  "_说明": "Confluence 文档拉取配置。使用前请复制为 source/docs/docs.json 并填写实际值。",
+  "base_url": "https://your-confluence.example.com",
+  "roots": [
+    {
+      "page_id": "【根页面 ID】",
+      "description": "【描述，如：产品文档】"
+    }
+  ]
+}

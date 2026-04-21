@@ -1,0 +1,26 @@
+# ewankb 全局配置
+# 位置：~/.config/ewankb/ewankb.toml（Linux/Mac）
+#       %APPDATA%/ewankb/ewankb.toml（Windows）
+
+[api]
+api_key = "sk-ant-..."
+base_url = ""                              # 留空使用官方 API，或填写自定义代理地址
+default_model = "claude-haiku-4-5-20251001"
+extraction_max_tokens = 4096               # 单次文档提炼最大输出 token
+
+[build]
+parallel_workers = 4                       # 文档提炼并行线程数
+incremental = true                         # 图谱增量构建（基于文件哈希跳过未变更文件）
+skip_semantic = false                      # 跳过语义相似度计算（加速构建）
+
+[graph]
+default_traversal = "bfs"                  # 查询默认遍历策略：bfs / dfs
+max_nodes = 100                            # 单次查询最大遍历节点数
+
+[query]
+default_max_tokens = 8192                  # 查询回答最大输出 token
+
+[community]
+algorithm = "leiden"                       # 社区检测算法：leiden / louvain
+max_community_fraction = 0.25              # 单个社区最大占比
+min_community_size = 3                     # 最小社区节点数
