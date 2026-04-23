@@ -26,7 +26,17 @@ ewankb preflight --dir .
 解析 JSON：`kb_dir` 是知识库路径。
 
 **preflight 失败处理**（自动引导配置）：
-- `blockers` 含 `no_llm_config` → 执行 `ewankb preflight --fix --dir .` 自动创建 `llm_config.json` 模板，然后提示用户编辑并填入 API Key，停止
+- `blockers` 仅含 `no_llm_config`（其他 blocker 都不存在）→ 直接用 Write 工具创建 `{kb_dir}/llm_config.json`，内容如下：
+  ```json
+  {
+    "api_key": "",
+    "base_url": "",
+    "model": "claude-haiku-4-5-20251001",
+    "api_protocol": "anthropic"
+  }
+  ```
+  然后提示用户编辑并填入 API Key，停止
+- `blockers` 含 `no_llm_config` 且同时有其他 blocker → 如实告知所有 blocker（包含 llm_config 缺失和其他），停止
 - `blockers` 含 `no_api_key` → `llm_config.json` 存在但 API Key 为空，提示用户填入，停止
 - 其他 blocker → 如实告知用户并停止
 
