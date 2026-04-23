@@ -25,6 +25,11 @@ ewankb preflight --dir .
 
 解析 JSON：`kb_dir` 是知识库路径。
 
+**preflight 失败处理**（自动引导配置）：
+- `blockers` 含 `no_llm_config` → 执行 `ewankb preflight --fix --dir .` 自动创建 `llm_config.json` 模板，然后提示用户编辑并填入 API Key，停止
+- `blockers` 含 `no_api_key` → `llm_config.json` 存在但 API Key 为空，提示用户填入，停止
+- 其他 blocker → 如实告知用户并停止
+
 **自动拉取**（消费者无需手动 pull）：
 - 如果 `kb_dir` 是 git 仓库，检查是否有 remote 配置：
   ```bash

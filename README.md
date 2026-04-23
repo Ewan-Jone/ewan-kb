@@ -37,34 +37,23 @@ source/          →  domains/           →  knowledgeBase/     →  graph/
 
 > 知识库本身是一个 git 仓库。以上四层产物全部提交到远程仓库，消费者 clone 后即可查询。`source/` 在 ewan-kb **工具仓库**中被 gitignore（避免把工具源码混入），但在**知识库仓库**中正常提交。
 
-## 使用方式
+## 快速开始
 
-知识库有两类用户角色：
+### 构建者
 
-- **构建者**：负责搭建和维护知识库的人（通常是熟悉系统代码和业务的研发），使用 `/ewankb` 执行构建、更新、推送等操作。需要配置 `llm_config.json`（LLM API 凭证）。
-- **消费者**：需要查询业务知识的人（研发、产品、测试、新人等），使用 `/ewankb-query` 直接提问。clone 知识库后需自行创建 `llm_config.json`，无需了解构建过程。
+构建者负责搭建和维护知识库，通常是熟悉系统代码和业务的研发。
 
-这样划分是因为构建过程需要代码和文档的写入权限、LLM API 配置、以及对业务域映射的理解；而消费者只需要一个已构建好的知识库（通过 git clone 获取）+ 自己的 LLM API 凭证即可开始查询。
+```bash
+# 1. 安装
+pip install ewankb
+ewankb install          # 安装 Claude Code skills
 
-### 构建者（/ewankb）
-
-**前置条件**：`pip install ewankb` + `ewankb install`（安装 Claude Code skills）+ 配置 `llm_config.json`（LLM API 凭证）。
-
-**首次构建**：
-
-```
+# 2. 首次构建（交互式引导，自动配置 llm_config.json）
 /ewankb <知识库路径>
-```
 
-执行完整流程：preflight（自动创建 `project_config.json` + `llm_config.json`）→ discover → 模块映射 → knowledgebase → build-graph。首次运行后需编辑 `llm_config.json` 填入 API Key。
-
-**增量构建**：
-
-```
+# 3. 增量构建（自动检测变更，只重跑受影响的域）
 /ewankb
 ```
-
-自动检测 source/ 变更，只重跑受影响的域。
 
 **常用子命令**：
 
@@ -79,25 +68,28 @@ source/          →  domains/           →  knowledgeBase/     →  graph/
 | `/ewankb push` | 提交并推送到远程仓库 |
 | `/ewankb diff` | 检测 source/ 变更，展示受影响的域 |
 
-### 消费者（/ewankb-query）
+### 消费者
 
-消费者通过 git clone 获取已构建好的知识库后，需要创建自己的 `llm_config.json`（存放 LLM API 凭证），然后即可查询。
+消费者只需克隆已构建好的知识库，配置 LLM API 凭证后即可查询。
 
 ```bash
-# 1. 克隆知识库
+# 1. 安装
+pip install ewankb
+ewankb install          # 安装 Claude Code skills
+
+# 2. 克隆知识库
 git clone <知识库地址> my-kb
 cd my-kb
 
-# 2. 创建 llm_config.json（首次使用，模板见 examples/llm_config.example.json）
-ewankb preflight --fix --dir .
-# 然后编辑 llm_config.json，填入你的 API Key 等凭证
-
 # 3. 开始查询
+/ewankb-query <问题>
 ```
+
+> 首次查询时，skill 会自动检测 `llm_config.json` 是否存在，如缺失会引导你创建并填入 API Key。
 
 | 命令 | 说明 |
 |------|------|
-| `/ewankb-query <问题>` | 图谱查询（默认，BFS 遍历关联节点） |
+| `/ewankb-query <问题>` | 图谱查询（BFS 遍历关联节点） |
 | `/ewankb-query kb <问题>` | 文档检索（BM25 检索知识库文档） |
 | `/ewankb-query deep <问题>` | 双路对比查询（图谱 + 文档并行，交叉验证） |
 
