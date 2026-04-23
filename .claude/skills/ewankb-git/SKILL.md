@@ -1,9 +1,9 @@
 ---
-name: Ewan-kb-git
+name: ewankb-git
 description: Commit and version knowledge base layers (source, knowledgeBase, graph) to git.
 ---
 
-# Ewan-kb-git Skill
+# ewankb-git Skill
 
 Version-control your knowledge base in four git-committed layers.
 

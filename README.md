@@ -1,41 +1,37 @@
 # Ewan-kb
 
-从 Java 后端代码 + 业务文档自动构建结构化业务知识库。
+从 Java 后端代码和业务文档中构建按业务域组织的知识库，并生成可查询的知识图谱。
 
-> **注意**：Ewan-kb 目前必须配合 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 使用。其 skill 定义（构建流程编排、交互式配置、语义提取等）和提示词均专为 Claude Code 设计，暂不支持其他 AI 编码工具。
+它适合需要沉淀业务知识、梳理流程、支持新成员理解系统的团队。构建完成后，你会得到两类产物：
 
-## 对比 graphify 
+- 面向人的业务知识库文档
+- 面向查询的结构化图谱
 
-[graphify](https://github.com/safishamsi/graphify) 是通用知识图谱构建工具，支持代码（tree-sitter AST，17 种语言）和文档（LLM 语义提取），输出为 `graph.json` + 社区报告 + wiki。
+> **使用前须知**：Ewan-kb 的完整使用体验目前以 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 为主，尤其是 slash command、交互式构建流程和语义提取提示词。底层 `ewankb` CLI 可单独使用，但 Claude Code 仍是当前的推荐入口。
 
-Ewan-kb 底层同样构建知识图谱（调用 graphify 做 AST 提取 + LLM 语义提取），但**不止于图**——在图谱之上增加了业务域组织、文档提炼、流程生成等层次，形成四层结构。查询时也不局限于图谱遍历，支持图谱查询、文档检索、双路对比等多种方式。
+## 适用场景
 
-| 维度 | graphify | Ewan-kb |
-|------|----------|---------|
-| 定位 | 通用知识图谱 | 业务域知识库（含图谱） |
-| 组织方式 | 按代码结构 / 社区聚类 | 按业务域（自动发现 + AI 翻译） |
-| 输出形态 | 图谱（graph.json） | 四层结构（source → domains → knowledgeBase → graph） |
-| 文档产物 | 无，图谱即终态 | 生成人类可读的域概览 + 流程文档 |
-| 查询方式 | 图谱遍历（BFS/DFS） | 图谱遍历 + 文档检索 + 双路对比 |
-| 增量粒度 | 文件级 hash | 域级影响映射（变更文件 → 模块 → 域） |
-| 代码支持 | 17 种语言 | Java（域发现基于包路径） |
-| 适用场景 | 任何代码仓库 | Java 微服务后端 + 业务文档的企业项目 |
+**适合：**
 
-## 四层架构
+- Java 微服务后端 + 业务文档较多的企业项目
+- 需要按业务域整理知识，而不只是做代码图谱的团队
+- 希望同时支持文档检索、图谱查询和流程理解的场景
 
-```
-source/          →  domains/           →  knowledgeBase/     →  graph/
-(原始数据)         (域组织 + AI 产物)     (最终知识库)           (可查询图谱)
-```
+**暂不适合：**
 
-| 层 | 职责 | 产物 |
-|----|------|------|
-| `source/` | 存放原始代码和文档 | Java 代码、.md 文档 |
-| `domains/` | 按业务域组织，存放 extract 输出 + AI 生成的概览和流程 | README.md、PROCESSES.md、代码模块说明/、各类型文档/ |
-| `knowledgeBase/` | 最终知识库，按文档类型平铺 | .md 文档（从 domains/ 迁移） |
-| `graph/` | 知识图谱（AST + 语义） | graph.json、communities、统计 |
+- 非 Java 后端为主的项目
+- 只需要通用代码图谱、不需要业务知识库分层的场景
+- 不使用 Claude Code 的工作流
 
-> 知识库本身是一个 git 仓库。以上四层产物全部提交到远程仓库，消费者 clone 后即可查询。`source/` 在 ewan-kb **工具仓库**中被 gitignore（避免把工具源码混入），但在**知识库仓库**中正常提交。
+## 你属于哪类用户？
+
+### 构建者
+
+负责搭建和维护知识库，通常是熟悉系统代码和业务的研发。你需要准备源码、业务文档、项目配置和 LLM 凭证，并使用 `/ewankb` 或底层 `ewankb` CLI 执行构建、更新和同步。
+
+### 使用者
+
+负责查询和消费知识库内容，通常是研发、产品、测试或新成员。你不需要了解构建细节，只需要一个已构建好的知识库副本和自己的 `llm_config.json`，并使用 `/ewankb-query` 提问。
 
 ## 快速开始
 
@@ -55,22 +51,9 @@ ewankb install          # 安装 Claude Code skills
 /ewankb
 ```
 
-**常用子命令**：
+### 使用者
 
-| 命令 | 说明 |
-|------|------|
-| `/ewankb` | 完整构建（含增量检测） |
-| `/ewankb --build-kb` | 仅构建 domains + knowledgeBase |
-| `/ewankb --build-kb --skip-discover` | 跳过域发现，从代码分析开始 |
-| `/ewankb --build-graph` | 仅构建图谱（AST + 语义提取） |
-| `/ewankb discover` | 重跑域发现 + 模块映射 |
-| `/ewankb pull` | 拉取远程知识库 + 同步源码 + 同步文档 |
-| `/ewankb push` | 提交并推送到远程仓库 |
-| `/ewankb diff` | 检测 source/ 变更，展示受影响的域 |
-
-### 消费者
-
-消费者只需克隆已构建好的知识库，创建 `llm_config.json` 并填入 LLM API 凭证后即可查询。
+使用者只需克隆已构建好的知识库，创建 `llm_config.json` 并填入 LLM API 凭证后即可查询。
 
 ```bash
 # 1. 安装
@@ -97,125 +80,95 @@ EOF
 
 > 如使用 Claude Code，首次查询时 skill 也会自动检测并引导创建。手动创建可跳过这一步。模板文件见 `examples/llm_config.example.json`。
 
+### 安装说明
+
+默认安装方式：
+
+```bash
+pip install ewankb
+ewankb install
+```
+
+运行环境要求：Python 3.10+。安装包会自动拉取 `graphifyy`、`anthropic`、`rank-bm25`、`jieba` 等依赖。
+
+### 源码安装（开发者）
+
+如果你要参与开发、调试本地改动或直接从仓库运行最新代码，再使用源码安装：
+
+```bash
+git clone https://github.com/Ewan-Jone/ewan-kb.git
+cd ewan-kb
+pip install -e .
+ewankb install
+```
+
+## 常用命令
+
+### Claude Code 入口
+
+| 命令 | 用途 |
+|------|------|
+| `/ewankb` | 完整构建知识库 |
+| `/ewankb --build-kb` | 仅构建 `domains/` 和 `knowledgeBase/` |
+| `/ewankb --build-kb --skip-discover` | 跳过域发现，直接重跑知识库流水线 |
+| `/ewankb --build-graph` | 仅构建图谱 |
+| `/ewankb discover` | 单独执行域发现 |
+| `/ewankb pull` | 拉取远程知识库并同步源码/文档 |
+| `/ewankb push` | 提交并推送知识库 |
+| `/ewankb diff` | 检测变更并展示受影响域 |
+| `/ewankb-query <问题>` | 图谱查询（默认） |
+| `/ewankb-query kb <问题>` | 文档检索 |
+| `/ewankb-query deep <问题>` | 图谱 + 文档双路对比 |
+
+### CLI 构建命令
+
 | 命令 | 说明 |
 |------|------|
-| `/ewankb-query <问题>` | 图谱查询（BFS 遍历关联节点） |
-| `/ewankb-query kb <问题>` | 文档检索（BM25 检索知识库文档） |
-| `/ewankb-query deep <问题>` | 双路对比查询（图谱 + 文档并行，交叉验证） |
+| `ewankb init <name>` | 初始化新知识库目录 |
+| `ewankb preflight --fix --dir .` | 检查环境并补齐缺失目录/配置 |
+| `ewankb discover` | 域发现 |
+| `ewankb knowledgebase` | 构建 `domains/` + `knowledgeBase/` |
+| `ewankb knowledgebase --skip-discover` | 跳过域发现直接执行 7 步流水线 |
+| `ewankb build` | 完整构建（知识库 + 图谱） |
+| `ewankb build --kb` | 仅构建知识库 |
+| `ewankb build --graph` | 仅构建图谱 |
+| `ewankb diff` | 检测 `source/` 变更 |
+| `ewankb rebuild` | 清空生成产物，做一次干净重建 |
 
-## 核心流程
+### CLI 查询命令
 
-### 域发现（discover）
-
-1. **代码扫描**：扫描 `source/repos/` 下的 Java 包路径，提取业务 segment（跳过停用词表中的技术层词汇）
-2. **AI 精炼**：将代码 segment + 文档标题样本发给 LLM，翻译为中文域名并做合并/拆分/层级组织
-3. **模块映射**：AI 辅助将代码目录映射到对应的业务域
-
-产出：`domains/_meta/domains.json`
-
-### 知识库构建（knowledgebase）
-
-7 步流水线，按顺序执行：
-
-| 步骤 | 说明 |
+| 命令 | 说明 |
 |------|------|
-| analyze_code | 扫描代码结构，生成 code_analysis.json |
-| extract | 读取文档全文，AI 分类到对应域的文档类型子目录 |
-| gen_code_module_docs | 为每个域的代码模块生成说明文档 |
-| enrich | 为已分类文档追加关联代码信息（类名、接口路径） |
-| gen_overview | 为每个域生成 README.md（业务定位、代码模块、表结构、文档索引） |
-| gen_processes | 为每个域生成 PROCESSES.md（L1/L2/L3 三级流程） |
-| migrate | 将 domains/ 下的文档迁移到 knowledgeBase/ 按类型平铺 |
+| `ewankb query <text>` | 图谱查询 |
+| `ewankb query-graph <text>` | 图谱查询别名 |
+| `ewankb query-kb <text>` | 文档检索 |
+| `ewankb graph-stats` | 图谱统计 |
+| `ewankb communities` | 查看社区聚类 |
+| `ewankb surprising` | 查看跨域关联 |
 
-### 图谱构建（build-graph）
+### 配置与维护命令
 
-1. **AST 提取**（graphify）：从 Java 代码提取类、方法、调用关系等节点和边
-2. **语义提取**（LLM，通过 skill 触发）：从 domains/ 的 README 和 PROCESSES 中提取业务概念、流程步骤、代码关联
-3. **合并**：AST 节点 + 语义节点去重合并
-4. **社区检测**：Leiden 算法发现结构聚类
-5. **输出**：graph.json + 统计 + 建议
-
-### 增量更新
-
-1. **Hash 缓存**：首次构建后记录所有 source/ 文件的 SHA-256
-2. **变更检测**：对比当前文件 hash 与缓存，找出新增/修改/删除的文件
-3. **域影响映射**：变更文件 → 模块根目录 → domains.json 的 modules 映射 → 受影响的域
-4. **选择性清理**：清除受影响域的生成产物（README、PROCESSES、进度记录等）
-5. **重跑流水线**：流水线自动只处理被清理的域
-
-## 关键配置项
-
-### project_config.json（项目元数据，提交 git）
-
-| 字段 | 说明 |
+| 命令 | 说明 |
 |------|------|
-| `project_name` | 项目中文名（如"国际物流业务知识库"） |
-| `system_name` | 系统名称，用于 AI prompt（如"国际物流系统"） |
-| `doc_type_rules` | 文档类型识别规则（类型名 + 关键词列表） |
-| `code_structure` | 代码仓库目录约定（java_package_prefix 等） |
-| `skip_domains` | 跳过不生成概览的域列表 |
-| `skip_doc_types_for_enrich` | enrich 阶段跳过的文档类型 |
-| `system_fields` | DB schema 提取时过滤的通用系统字段 |
-| `extraction_prompts` | 各文档类型的自定义提炼 prompt |
-| `segment_stopwords` | 域发现停用词表（初始化时从内置默认值写入，项目级完全覆盖） |
+| `ewankb config --show` | 查看当前配置 |
+| `ewankb config --edit` | 编辑 `project_config.json` |
+| `ewankb config --edit-llm` | 编辑 `llm_config.json` |
+| `ewankb install` | 安装 Claude Code skills |
 
-### llm_config.json（LLM 凭证，不提交 git）
+## 构建完成后会看到什么
 
-| 字段 | 说明 |
-|------|------|
-| `api_key` | LLM API Key |
-| `base_url` | LLM API Base URL（留空使用 Anthropic 官方） |
-| `model` | 模型名称（默认 claude-haiku-4-5-20251001） |
-| `api_protocol` | API 协议类型：`anthropic` 或 `openai` |
+一个完整知识库通常包含四层产物：
 
-> 每位使用者需要创建自己的 `llm_config.json` 并填入 API 凭证。`project_config.json` 随知识库提交到 git，团队共享。`llm_config.json` 模板见 `examples/llm_config.example.json`。
-
-### 域发现停用词表
-
-`project_config.json` 中的 `segment_stopwords` 字段控制从 Java 包路径中提取业务 segment 的行为：
-
-| 词表 | 作用 | 示例 |
-|------|------|------|
-| `segment_stopwords` | 技术层 + 框架 + 项目名，无业务含义，匹配时直接跳过 | api, controller, service, impl, common, logistics |
-| `package_wrappers` | 技术分层目录名，跳过它但继续往后找下一个词 | rest, feign, remote, job, batch |
-| `generic_noise` | 通用名词，单独出现无业务区分度，不作为域标识 | info, detail, list, data, record, manage |
-
-提取逻辑：逐个检查包路径片段，跳过在停用词表中的词，第一个不在任何表中的词即为 segment。
-
-`ewankb init` 时会将内置默认词表写入 `project_config.json`。项目级配置完全覆盖默认值——直接编辑 `segment_stopwords` 字段增删词即可。旧版 `project_config.json`（不含 `segment_stopwords` 字段）在首次运行 discover 时会自动将默认词表补写到文件中。
-
-### source/repos/repos.json（可选）
-
-配置需要从 git 自动拉取的代码仓库。`/ewankb pull` 时自动克隆或更新。
-
-```json
-{
-  "repos": [
-    {"name": "my-service", "url": "git@...", "branch": "master"}
-  ]
-}
+```text
+source/          →  domains/           →  knowledgeBase/     →  graph/
+(原始数据)         (域组织 + AI 产物)     (最终知识库)           (可查询图谱)
 ```
 
-也支持不配置 repos.json，直接手动将代码目录放到 `source/repos/` 下。
+> 知识库本身是一个 git 仓库。以上四层产物都会提交到知识库仓库，消费者 clone 后即可查询。`source/` 在 ewan-kb 工具仓库中会被 gitignore，但在知识库仓库中正常提交。
 
-### source/docs/docs.json（可选）
+目录示例：
 
-Confluence 文档自动拉取配置。内置爬虫会递归抓取指定根页面下的所有子页面并转为 .md 格式。
-
-```json
-{
-  "base_url": "https://your-confluence.example.com",
-  "roots": [
-    {"page_id": "12345", "description": "产品文档"}
-  ]
-}
-```
-
-> **文档来源不限于 Confluence**。只要是 `.md` 格式放到 `source/docs/` 即可参与构建。Confluence 只是提供了现成的爬取+转换工具，其他来源（语雀、飞书、本地文档等）需用户自行转为 `.md` 放入。
-
-## 目录结构
-
-```
+```text
 my-knowledge-base/
 ├── project_config.json          # 项目元数据（提交 git）
 ├── llm_config.json              # LLM 凭证（不提交 git，每人自行创建）
@@ -224,7 +177,7 @@ my-knowledge-base/
 │   │   ├── repos.json           # git 拉取配置（可选）
 │   │   └── my-service/          # 代码目录
 │   ├── docs/                    # 业务文档（.md）
-│   │   ├── docs.json            # CF 拉取配置（可选）
+│   │   ├── docs.json            # Confluence 拉取配置（可选）
 │   │   └── *.md
 │   └── .cache/                  # 增量构建缓存
 │       ├── hashes.json
@@ -254,59 +207,156 @@ my-knowledge-base/
     └── domain_suggestions.json
 ```
 
-## 安装
+四层职责：
 
-```bash
-# 从 PyPI 安装
-pip install ewankb
+| 层 | 职责 | 产物 | Git 提交 |
+|----|------|------|----------|
+| `source/` | 存放原始代码和文档 | Java 代码、`.md` 文档 | 是 |
+| `domains/` | 按业务域组织，存放中间产物和 AI 生成概览 | README、PROCESSES、分类文档 | 是 |
+| `knowledgeBase/` | 最终知识库，按文档类型平铺 | 迁移后的 `.md` 文档 | 是 |
+| `graph/` | 知识图谱（AST + 语义） | `graph.json`、统计、建议 | 是 |
 
-# 安装 Claude Code skills（构建者必做）
-ewankb install
+## 核心流程
 
-# 验证
-ewankb --help
+### 1. 域发现（discover）
+
+1. 扫描 `source/repos/` 下的 Java 包路径
+2. 提取业务 segment，跳过技术层词汇
+3. 由 LLM 翻译并整理为中文业务域
+4. 将代码目录映射到域
+
+主要产出：`domains/_meta/domains.json`
+
+### 2. 知识库构建（knowledgebase）
+
+`ewankb knowledgebase` 会执行 7 步流水线：
+
+| 步骤 | 说明 |
+|------|------|
+| `analyze_code` | 扫描代码结构，生成 `code_analysis.json` |
+| `extract` | 读取文档全文，分类到对应域和文档类型 |
+| `gen_code_module_docs` | 为每个域生成代码模块说明文档 |
+| `enrich` | 为文档追加关联代码信息（类名、接口路径等） |
+| `gen_overview` | 为每个域生成 `README.md` |
+| `gen_processes` | 为每个域生成 `PROCESSES.md` |
+| `migrate` | 将 `domains/` 下的文档迁移到 `knowledgeBase/` |
+
+### 3. 图谱构建（build-graph）
+
+1. 使用 graphify 提取 AST 节点和调用关系
+2. 从 `domains/` 的 README 和流程文档中提取语义节点
+3. 合并 AST 节点和语义节点
+4. 做社区检测并输出统计结果
+
+输出：`graph/graph.json`、`communities.json`、`domain_suggestions.json`
+
+### 4. 增量更新
+
+1. 首次构建后记录 `source/` 文件哈希
+2. 对比新增、修改、删除文件
+3. 将变更文件映射到业务域
+4. 清理受影响域的生成产物
+5. 只重跑受影响域对应的流水线
+
+## 关键配置
+
+### `project_config.json`（项目元数据，提交 git）
+
+| 字段 | 说明 |
+|------|------|
+| `project_name` | 项目中文名，如“国际物流业务知识库” |
+| `system_name` | 系统名称，用于 LLM prompt |
+| `doc_type_rules` | 文档类型识别规则 |
+| `code_structure` | 代码仓库目录约定，如 `java_package_prefix` |
+| `skip_domains` | 跳过不生成概览的域列表 |
+| `skip_doc_types_for_enrich` | enrich 阶段跳过的文档类型 |
+| `system_fields` | DB schema 提取时过滤的通用系统字段 |
+| `extraction_prompts` | 各文档类型的自定义提炼 prompt |
+| `segment_stopwords` | 域发现停用词表，项目级完全覆盖默认值 |
+
+模板可参考：
+
+- `config/project_config.template.json`
+- `tools/project_config.template.json`
+
+### `llm_config.json`（LLM 凭证，不提交 git）
+
+| 字段 | 说明 |
+|------|------|
+| `api_key` | LLM API Key |
+| `base_url` | LLM API Base URL，留空则使用 Anthropic 官方 |
+| `model` | 模型名称，默认 `claude-haiku-4-5-20251001` |
+| `api_protocol` | API 协议类型：`anthropic` 或 `openai` |
+
+每位使用者都需要创建自己的 `llm_config.json` 并填入 API 凭证。模板文件见 `examples/llm_config.example.json`。
+
+### 可选输入源：代码仓库和文档
+
+`source/repos/repos.json` 用于配置需要自动拉取的代码仓库：
+
+```json
+{
+  "repos": [
+    {"name": "my-service", "url": "git@...", "branch": "master"}
+  ]
+}
 ```
 
-构建者还需在 Claude Code 的 `CLAUDE.md` 中添加 skill 触发配置（`ewankb install` 会自动处理），并在知识库目录中配置 `llm_config.json`（LLM API 凭证）。
+也可以不配，直接把代码放到 `source/repos/`。
 
-如需从源码开发：
-```bash
-git clone https://github.com/Ewan-Jone/ewan-kb.git
-cd ewan-kb
-pip install -e .
-ewankb install
+`source/docs/docs.json` 用于配置 Confluence 抓取：
+
+```json
+{
+  "base_url": "https://your-confluence.example.com",
+  "roots": [
+    {"page_id": "12345", "description": "产品文档"}
+  ]
+}
 ```
 
-依赖：Python 3.10+、graphifyy、anthropic SDK、rank-bm25、jieba。
+文档来源不限于 Confluence。只要是 `.md` 格式放到 `source/docs/`，都可以参与构建。
 
-### CLI 命令
+### 高级调优：`segment_stopwords`
 
-```
-ewankb init <name>              初始化新知识库
-ewankb discover                 域发现
-ewankb knowledgebase            构建 domains/ + knowledgeBase/
-ewankb build-graph              构建图谱
-ewankb build                    完整构建（knowledgebase + graph）
-ewankb build --kb               仅构建 domains + knowledgeBase
-ewankb build --graph            仅构建图谱
-ewankb query <text>             图谱查询
-ewankb query-kb <text>          文档检索
-ewankb graph-stats              图谱统计
-ewankb diff                     检测变更（增量构建）
-ewankb rebuild                  清理所有生成产物，准备全量重建
-ewankb preflight [--fix]        环境检查（--fix 自动创建缺失项）
-ewankb config                   查看项目配置
-ewankb config --edit            编辑 project_config.json
-ewankb config --edit-llm        编辑 llm_config.json（API 凭证）
-ewankb install                  安装 Claude Code skills
-```
+`project_config.json` 中的 `segment_stopwords` 字段控制从 Java 包路径中提取业务 segment 的方式。内置默认值来源于 `tools/discover/segment_stopwords.json`，但项目级配置会完全覆盖默认值。
+
+| 词表 | 作用 | 示例 |
+|------|------|------|
+| `segment_stopwords` | 技术层、框架、项目名，匹配时直接跳过 | `api`, `controller`, `service` |
+| `package_wrappers` | 技术分层目录名，跳过后继续往后找 | `rest`, `feign`, `job` |
+| `generic_noise` | 无业务区分度的泛化词，不作为域标识 | `info`, `detail`, `record` |
+
+提取逻辑是：逐个检查包路径片段，跳过停用词，遇到第一个有效词就作为业务 segment。
+
+`ewankb init` 会将内置默认词表写入 `project_config.json`。旧版 `project_config.json` 如果缺少这个字段，首次运行 discover 时会自动补写。
+
+## 与 graphify 的关系
+
+[graphify](https://github.com/safishamsi/graphify) 是通用知识图谱构建工具，支持代码 AST 和文档语义提取，输出图谱和社区结果。
+
+Ewan-kb 底层同样会调用 graphify 做 AST 提取，但它不止停在“图”这一层，而是在图谱之上增加了业务域组织、知识库文档生成和流程提炼能力。
+
+| 维度 | graphify | Ewan-kb |
+|------|----------|---------|
+| 定位 | 通用知识图谱 | 业务域知识库（含图谱） |
+| 组织方式 | 按代码结构 / 社区聚类 | 按业务域（自动发现 + AI 翻译） |
+| 输出形态 | 图谱（`graph.json`） | 四层结构（`source -> domains -> knowledgeBase -> graph`） |
+| 文档产物 | 无，图谱即终态 | 生成人类可读的域概览和流程文档 |
+| 查询方式 | 图谱遍历 | 图谱查询 + 文档检索 + 双路对比 |
+| 增量粒度 | 文件级 hash | 域级影响映射 |
+| 代码支持 | 17 种语言 | Java（域发现基于包路径） |
+| 适用场景 | 任意代码仓库 | Java 微服务后端 + 业务文档项目 |
+
+如果你的目标只是快速得到一个通用代码图谱，graphify 就够了；如果你想得到“按业务域组织的知识库 + 图谱 + 查询入口”，Ewan-kb 更合适。
 
 ## 已知限制
 
-- 代码域发现目前仅支持 Java（基于包路径提取 segment）
+- 代码域发现目前仅支持 Java，且依赖包路径约定
 - LLM 语义提取质量依赖 prompt 和模型能力
-- 图谱的语义节点提取（文档→图谱）仅通过 Claude Code skill 触发，CLI 单独执行 `build-graph` 只有 AST 节点
-- 消费者 clone 知识库后需自行创建 `llm_config.json` 配置 LLM API 凭证（`ewankb preflight --fix` 可自动生成模板）
+- 文档语义入图目前主要通过 Claude Code skill 触发
+- 消费者 clone 知识库后仍需自行配置 `llm_config.json`
+- README 中提到的 Claude Code slash command 依赖先执行 `ewankb install`
 
 ## License
 
