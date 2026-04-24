@@ -69,12 +69,18 @@ def main() -> None:
     query_p.add_argument("--traversal", choices=["bfs", "dfs"])
     query_p.add_argument("--depth", type=int, help="Max traversal depth")
     query_p.add_argument("--max-tokens", type=int, help="Max output tokens")
+    query_p.add_argument("--json", action="store_true", help="Output structured JSON")
+    query_p.add_argument("--limit", type=int, default=150, help="Max nodes to visit (default: 150)")
+    query_p.add_argument("--verbose", action="store_true", help="Show debug info")
 
     qg_p = sub.add_parser("query-graph", help="Query via knowledge graph (alias for query)")
     qg_p.add_argument("text", type=str, help="Query text")
     qg_p.add_argument("--traversal", choices=["bfs", "dfs"])
     qg_p.add_argument("--depth", type=int, help="Max traversal depth")
     qg_p.add_argument("--max-tokens", type=int, help="Max output tokens")
+    qg_p.add_argument("--json", action="store_true", help="Output structured JSON")
+    qg_p.add_argument("--limit", type=int, default=150, help="Max nodes to visit (default: 150)")
+    qg_p.add_argument("--verbose", action="store_true", help="Show debug info")
 
     qkb_p = sub.add_parser("query-kb", help="Query knowledge base directly (domains + knowledgeBase + source)")
     qkb_p.add_argument("text", type=str, help="Query text")
@@ -427,19 +433,36 @@ def cmd_build_graph() -> None:
 def cmd_query(args: argparse.Namespace) -> None:
     """Query the graph."""
     sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.graph_runtime.query_engine import query
+    from tools.graph_runtime.query_engine import query, query_graph_json
 
     traversal = args.traversal
     if args.depth and not traversal:
         traversal = "bfs"
 
-    result = query(
-        args.text,
-        traversal=traversal,
-        max_nodes=args.depth * 15 if args.depth else None,
-        max_tokens=args.max_tokens,
-    )
-    print(result)
+    # 根据 max_nodes 限制：大图保护
+    max_nodes = args.limit
+    if args.depth:
+        max_nodes = min(args.depth * 15, args.limit)
+
+    if args.json:
+        result = query_graph_json(
+            args.text,
+            traversal=traversal,
+            max_nodes=max_nodes,
+            verbose=args.verbose,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        result = query(
+            args.text,
+            traversal=traversal,
+            max_nodes=max_nodes,
+            max_tokens=args.max_tokens,
+        )
+        if args.verbose:
+            print(f"[DEBUG] Query: {args.text}", file=sys.stderr)
+            print(f"[DEBUG] Traversal: {traversal}, max_nodes: {max_nodes}", file=sys.stderr)
+        print(result)
 
 
 def cmd_query_kb(args: argparse.Namespace) -> None:

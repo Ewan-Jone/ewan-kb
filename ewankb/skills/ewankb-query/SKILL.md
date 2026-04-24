@@ -68,12 +68,40 @@ ewankb preflight --dir .
 ### 3A. Graph 模式（仅图谱）
 
 ```bash
-ewankb query "用户问题"
+ewankb query "用户问题" --json
 ```
 
 如果 `ewankb` 命令不可用，请先运行 `pip install ewankb`。
 
-解读结果并回答。回答末尾附建议："想看原文？试 `/ewankb-query kb \"同一问题\"`"
+**解析 JSON 结果并解读**：
+
+1. **matched_start_nodes 为空**：
+   → 告知用户图中未找到匹配节点，建议：
+   - 尝试更短的关键词（如"付款额度" → "付款"）
+   - 尝试用英文术语（如"overdraft"、"payment"）
+   - 检查 query_analysis.extracted_keywords 是否合理
+   - 建议用 `/ewankb-query kb "同一问题"` 切换到文档检索
+
+2. **matched_start_nodes 非空**：
+   → 基于 nodes 和 edges 用自然语言合成回答：
+   - 从 matched_start_nodes 出发，描述直接关联的概念
+   - 引用 source_file、source_location、relation 作为证据
+   - 如果图的深度不足以覆盖问题范围，如实说明
+   - 不要编造图中没有的关系
+   - 参考 graphify 的做法：基于图的边关系做有限推理
+
+**示例解读**：
+```
+根据图谱分析：
+- 找到 2 个与"预付款"相关的节点
+- 预付款执行付款 → calls → 付款计划
+  来源：domains/收付款管理/README.md
+
+这表明预付款流程和付款计划存在调用关系。但图中没有包含具体的额度计算逻辑，
+可能需要查看 `/ewankb-query kb` 文档检索来获取更详细的计算规则。
+```
+
+回答末尾附建议："想看原文？试 `/ewankb-query kb \"同一问题\"`"
 
 ### 3B. KB 模式（仅文档）
 

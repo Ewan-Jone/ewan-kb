@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from tools import config_loader as cfg
-from tools.text_utils import extract_keywords
+from tools.text_utils import tokenize
 
 
 # ── Graph loading ────────────────────────────────────────────────────────────
@@ -57,8 +57,10 @@ def score_nodes(G: nx.DiGraph, query: str) -> list[tuple[str, float]]:
       - Match in docstring/signature (weight: 0.8)
       - Node type bonus (function > class > module > concept > document)
     """
-    query_keywords = extract_keywords(query)
+    # 使用 jieba 分词，支持中文语义切分
+    query_keywords = tokenize(query)
     if not query_keywords:
+        # Fallback: 提取英文词
         query_keywords = {w.lower() for w in re.findall(r"\w{3,}", query.lower())}
 
     type_weights = {
@@ -82,9 +84,12 @@ def score_nodes(G: nx.DiGraph, query: str) -> list[tuple[str, float]]:
         score = 0.0
 
         label = node.get("label", "").lower()
-        sig = node.get("signature", "").lower()
-        doc = node.get("docstring", "").lower()
-        ntype = node.get("type", "unknown")
+        sig = (node.get("signature") or node.get("sig") or "").lower()
+        doc = (node.get("docstring") or node.get("doc") or "").lower()
+        # 兼容 graphify 字段名：file_type -> type
+        ntype = node.get("type") or node.get("file_type", "unknown")
+        # 兼容 source_file 和 source_location
+        source_file = (node.get("source_file") or node.get("file") or "").lower()
 
         for kw in query_keywords:
             kw_lower = kw.lower()
@@ -94,6 +99,9 @@ def score_nodes(G: nx.DiGraph, query: str) -> list[tuple[str, float]]:
                 score += 0.8
             if kw_lower in doc:
                 score += 0.5
+            # source_file 匹配（捕获路径中的模块名）
+            if kw_lower in source_file:
+                score += 0.3
 
         score *= type_weights.get(ntype, 1.0)
 
@@ -305,6 +313,130 @@ def query(
         show_node_type=gcfg.show_node_type,
         show_trust=gcfg.show_trust_tags,
     )
+
+
+def query_graph_json(
+    query_text: str,
+    graph_file: Path | None = None,
+    traversal: str | None = None,
+    max_nodes: int | None = None,
+    verbose: bool = False,
+) -> dict[str, Any]:
+    """
+    Full query pipeline returning structured JSON.
+
+    Returns a dict with matched nodes, traversal results, and metadata.
+    """
+    import time
+    from tools.text_utils import tokenize
+
+    graph_data, G = load_graph(graph_file)
+    gcfg = cfg.get_global_config()
+
+    if traversal is None:
+        traversal = gcfg.default_traversal or "bfs"
+    if max_nodes is None:
+        max_nodes = gcfg.max_nodes
+
+    # Step 1: Score nodes with timing
+    start_time = time.time()
+    scored = score_nodes(G, query_text)
+    score_time = time.time() - start_time
+
+    # 获取分词后的关键词
+    query_keywords = tokenize(query_text)
+    if not query_keywords:
+        query_keywords = list(set(w.lower() for w in re.findall(r"\w{3,}", query_text.lower())))
+
+    result: dict[str, Any] = {
+        "query_analysis": {
+            "original_query": query_text,
+            "extracted_keywords": list(query_keywords),
+            "tokenization_method": "jieba" if any('一' <= c <= '鿿' for c in query_text) else "regex",
+            "total_nodes_scored": len(G.nodes()),
+            "scoring_time_ms": round(score_time * 1000, 1),
+        },
+        "matched_start_nodes": [],
+        "traversal": {
+            "method": traversal,
+            "max_nodes": max_nodes,
+            "visited_nodes": 0,
+            "visited_edges": 0,
+        },
+        "nodes": [],
+        "edges": [],
+        "total_nodes": len(G.nodes()),
+        "total_edges": len(G.edges()),
+        "message": "",
+    }
+
+    if verbose:
+        result["query_analysis"]["top_10_scores"] = [
+            {"id": nid, "score": round(score, 2)} for nid, score in scored[:10]
+        ]
+
+    if not scored:
+        result["message"] = "No matching nodes found in graph"
+        return result
+
+    # 构建 matched_start_nodes
+    for nid, score in scored[:10]:
+        node = G.nodes[nid]
+        result["matched_start_nodes"].append({
+            "id": nid,
+            "label": node.get("label", nid),
+            "type": node.get("type") or node.get("file_type", "unknown"),
+            "score": round(score, 2),
+            "source_file": node.get("source_file") or node.get("file", ""),
+        })
+
+    # Step 2: Traverse
+    start_time = time.time()
+    top_nodes = [nid for nid, _ in scored[:5]]
+
+    if traversal == "dfs":
+        visited = dfs_traverse(G, top_nodes, max_nodes)
+    else:
+        visited = bfs_traverse(G, top_nodes, max_nodes)
+
+    traverse_time = time.time() - start_time
+
+    # 构建节点和边的数据
+    node_map = {n["id"]: n for n in graph_data["nodes"]}
+    for node_id, visit_info in visited.items():
+        node = node_map.get(node_id)
+        if not node:
+            continue
+        result["nodes"].append({
+            "id": node_id,
+            "label": node.get("label", node_id),
+            "type": node.get("type") or node.get("file_type", "unknown"),
+            "source_file": node.get("source_file") or node.get("file", ""),
+            "source_location": node.get("source_location", ""),
+            "depth": visit_info.get("depth", 0),
+            "distance": visit_info.get("distance", 0),
+            "signature": node.get("signature", ""),
+            "docstring": (node.get("docstring") or node.get("doc") or "")[:200],
+        })
+
+    # 收集边
+    for node_id in visited.keys():
+        for _, target, data in G.out_edges(node_id, data=True):
+            if target in visited:
+                result["edges"].append({
+                    "source": node_id,
+                    "target": target,
+                    "relation": data.get("type", "relates"),
+                    "confidence": data.get("confidence", ""),
+                    "trust": data.get("trust", ""),
+                })
+
+    result["traversal"]["visited_nodes"] = len(result["nodes"])
+    result["traversal"]["visited_edges"] = len(result["edges"])
+    result["traversal"]["traverse_time_ms"] = round(traverse_time * 1000, 1)
+    result["message"] = f"Found {len(result['matched_start_nodes'])} matched start nodes, visited {len(result['nodes'])} nodes"
+
+    return result
 
 
 # ── Utility ─────────────────────────────────────────────────────────────────
