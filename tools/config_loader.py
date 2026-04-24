@@ -137,7 +137,7 @@ _project_cfg: dict[str, Any] | None = None
 
 
 def get_project_config() -> dict[str, Any]:
-    """Load project_config.json from the current kb directory."""
+    """Load project_config.json from the current kb directory. Auto-fills empty segment_stopwords on first load."""
     global _project_cfg
     if _project_cfg is not None:
         return _project_cfg
@@ -147,6 +147,20 @@ def get_project_config() -> dict[str, Any]:
         return {}
     with open(cfg_path, encoding="utf-8") as f:
         _project_cfg = json.load(f)
+
+    # Auto-fill empty segment_stopwords from built-in defaults
+    data = _project_cfg.get("segment_stopwords", {})
+    needs_fill = not data or any(
+        not data.get(key, {}).get("words")
+        for key in ("segment_stopwords", "package_wrappers", "generic_noise")
+    )
+    if needs_fill:
+        builtin = _load_builtin_stopwords()
+        _fill_empty_stopwords_to_config(builtin)
+        _project_cfg = None  # reset cache so next call reads the updated file
+        with open(cfg_path, encoding="utf-8") as f:
+            _project_cfg = json.load(f)
+
     return _project_cfg
 
 
@@ -292,28 +306,9 @@ def get_system_fields() -> set:
 
 
 def get_segment_stopwords() -> tuple[frozenset, frozenset, frozenset]:
-    """Read segment stopwords from project_config.json. Auto-fills empty word lists from built-in defaults."""
+    """Read segment stopwords from project_config.json. Empty word lists are auto-filled by get_project_config()."""
     pcfg = get_project_config()
     data = pcfg.get("segment_stopwords", {})
-
-    # Check if any word list is empty (missing key or empty array)
-    needs_fill = False
-    if not data:
-        needs_fill = True
-    else:
-        for key in ("segment_stopwords", "package_wrappers", "generic_noise"):
-            if not data.get(key, {}).get("words"):
-                needs_fill = True
-                break
-
-    if needs_fill:
-        builtin = _load_builtin_stopwords()
-        _fill_empty_stopwords_to_config(builtin)
-        # Re-read merged config (existing words preserved, empty ones filled)
-        import tools.config_loader as _mod
-        _mod._project_cfg = None
-        data = get_project_config().get("segment_stopwords", builtin)
-
     return (
         frozenset(data.get("segment_stopwords", {}).get("words", [])),
         frozenset(data.get("package_wrappers", {}).get("words", [])),
