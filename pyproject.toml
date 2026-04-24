@@ -34,6 +34,9 @@ dependencies = [
 openai = [
     "openai>=1.0.0",
 ]
+server = [
+    "fastmcp>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8.0",

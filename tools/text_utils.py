@@ -39,9 +39,10 @@ def extract_keywords(text: str) -> set[str]:
 
 
 def tokenize(text: str) -> list[str]:
-    """对文本做 jieba 分词 + 英文保留，去停用词，返回 token 列表。"""
+    """对文本做 jieba 分词 + 英文保留，去停用词，返回 token 列表（去重保序）。"""
     import jieba
 
+    seen = set()
     tokens = []
     for word in jieba.cut(text):
         word = word.strip()
@@ -56,5 +57,7 @@ def tokenize(text: str) -> list[str]:
         # 单字中文跳过（区分度低）
         if len(word) == 1 and _CHINESE_RE.fullmatch(word):
             continue
-        tokens.append(lower)
+        if lower not in seen:
+            seen.add(lower)
+            tokens.append(lower)
     return tokens

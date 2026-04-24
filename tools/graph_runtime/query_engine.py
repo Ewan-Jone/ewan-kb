@@ -57,11 +57,9 @@ def score_nodes(G: nx.DiGraph, query: str) -> list[tuple[str, float]]:
       - Match in docstring/signature (weight: 0.8)
       - Node type bonus (function > class > module > concept > document)
     """
-    # 使用 jieba 分词，支持中文语义切分
     query_keywords = tokenize(query)
     if not query_keywords:
-        # Fallback: 提取英文词
-        query_keywords = {w.lower() for w in re.findall(r"\w{3,}", query.lower())}
+        query_keywords = list({w.lower() for w in re.findall(r"\w{3,}", query.lower())})
 
     type_weights = {
         "function": 1.5,
@@ -328,7 +326,6 @@ def query_graph_json(
     Returns a dict with matched nodes, traversal results, and metadata.
     """
     import time
-    from tools.text_utils import tokenize
 
     graph_data, G = load_graph(graph_file)
     gcfg = cfg.get_global_config()
@@ -345,14 +342,15 @@ def query_graph_json(
 
     # 获取分词后的关键词
     query_keywords = tokenize(query_text)
+    used_jieba = bool(query_keywords)
     if not query_keywords:
-        query_keywords = list(set(w.lower() for w in re.findall(r"\w{3,}", query_text.lower())))
+        query_keywords = list({w.lower() for w in re.findall(r"\w{3,}", query_text.lower())})
 
     result: dict[str, Any] = {
         "query_analysis": {
             "original_query": query_text,
             "extracted_keywords": list(query_keywords),
-            "tokenization_method": "jieba" if any('一' <= c <= '鿿' for c in query_text) else "regex",
+            "tokenization_method": "jieba" if used_jieba else "regex",
             "total_nodes_scored": len(G.nodes()),
             "scoring_time_ms": round(score_time * 1000, 1),
         },

@@ -70,7 +70,7 @@ def main() -> None:
     query_p.add_argument("--depth", type=int, help="Max traversal depth")
     query_p.add_argument("--max-tokens", type=int, help="Max output tokens")
     query_p.add_argument("--json", action="store_true", help="Output structured JSON")
-    query_p.add_argument("--limit", type=int, default=150, help="Max nodes to visit (default: 150)")
+    query_p.add_argument("--limit", type=int, default=None, help="Max nodes to visit (overrides config default)")
     query_p.add_argument("--verbose", action="store_true", help="Show debug info")
 
     qg_p = sub.add_parser("query-graph", help="Query via knowledge graph (alias for query)")
@@ -79,7 +79,7 @@ def main() -> None:
     qg_p.add_argument("--depth", type=int, help="Max traversal depth")
     qg_p.add_argument("--max-tokens", type=int, help="Max output tokens")
     qg_p.add_argument("--json", action="store_true", help="Output structured JSON")
-    qg_p.add_argument("--limit", type=int, default=150, help="Max nodes to visit (default: 150)")
+    qg_p.add_argument("--limit", type=int, default=None, help="Max nodes to visit (overrides config default)")
     qg_p.add_argument("--verbose", action="store_true", help="Show debug info")
 
     qkb_p = sub.add_parser("query-kb", help="Query knowledge base directly (domains + knowledgeBase + source)")
@@ -432,17 +432,20 @@ def cmd_build_graph() -> None:
 
 def cmd_query(args: argparse.Namespace) -> None:
     """Query the graph."""
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.graph_runtime.query_engine import query, query_graph_json
+    from ewankb.query import query, query_graph_json
 
     traversal = args.traversal
     if args.depth and not traversal:
         traversal = "bfs"
 
-    # 根据 max_nodes 限制：大图保护
-    max_nodes = args.limit
+    # max_nodes: None means use config default; explicit --limit or --depth overrides
+    max_nodes = None
     if args.depth:
-        max_nodes = min(args.depth * 15, args.limit)
+        max_nodes = args.depth * 15
+        if args.limit and args.limit < max_nodes:
+            max_nodes = args.limit
+    elif args.limit:
+        max_nodes = args.limit
 
     if args.json:
         result = query_graph_json(
@@ -467,8 +470,7 @@ def cmd_query(args: argparse.Namespace) -> None:
 
 def cmd_query_kb(args: argparse.Namespace) -> None:
     """Query the knowledge base directly."""
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.graph_runtime.kb_query import query_kb
+    from ewankb.query import query_kb
 
     result = query_kb(
         args.text,
