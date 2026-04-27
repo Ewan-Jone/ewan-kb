@@ -95,6 +95,7 @@ def main() -> None:
     pf_p = sub.add_parser("preflight", help="Check environment readiness (JSON output)")
     pf_p.add_argument("--fix", action="store_true", help="Auto-create missing dirs and config")
     pf_p.add_argument("--dir", type=str, help="Target knowledge base directory (default: .)")
+    pf_p.add_argument("--query", action="store_true", help="Skip LLM-related checks (no_llm_config, no_api_key)")
 
     sub.add_parser("diff", help="Detect source changes and show affected domains")
     sub.add_parser("rebuild", help="Delete all generated artifacts (domains/, knowledgeBase/, graph/, source/.cache/) for a clean rebuild")
@@ -191,8 +192,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     )
 
     # Build project config using shared helper
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.config_loader import create_project_config
+    from ewankb.tools.config_loader import create_project_config
     create_project_config(kb_dir, args.name)
     print(f"  Created project_config.json + llm_config.json")
 
@@ -214,11 +214,10 @@ def cmd_init(args: argparse.Namespace) -> None:
 
 def cmd_diff() -> None:
     """Detect source changes and show affected domains."""
-    sys.path.insert(0, str(EWANKB_ROOT))
     kb_dir = _resolve_kb_dir()
     os.chdir(kb_dir)
 
-    from tools.incremental import diff
+    from ewankb.tools.incremental import diff
     result = diff()
 
     if not result["has_changes"]:
@@ -288,22 +287,20 @@ def cmd_rebuild() -> None:
 
 def cmd_discover() -> None:
     """Re-run domain discovery (AI translation)."""
-    sys.path.insert(0, str(EWANKB_ROOT))
     kb_dir = _resolve_kb_dir()
     os.chdir(kb_dir)
 
-    from tools.discover.discover_domains import discover
+    from ewankb.tools.discover.discover_domains import discover
     discover(kb_dir, use_ai=True)
 
     # Update source hash cache
-    from tools.incremental import update_hash
+    from ewankb.tools.incremental import update_hash
     result = update_hash()
     print(f"Hash cache updated: {result['total_files']} files")
 
 
 def cmd_knowledgebase(skip_discover: bool = False) -> None:
     """Build domains/ + knowledgeBase/: 7-step pipeline."""
-    sys.path.insert(0, str(EWANKB_ROOT))
 
     kb_dir = _resolve_kb_dir()
     os.chdir(kb_dir)
@@ -317,21 +314,25 @@ def cmd_knowledgebase(skip_discover: bool = False) -> None:
         env["EWANKB_DIR"] = str(kb_dir)
         env["PYTHONPATH"] = str(EWANKB_ROOT)
         env["PYTHONIOENCODING"] = "utf-8"
-        cmd = [sys.executable, str(script_path)]
+        # Derive module path from file path for relative imports to work
+        # e.g. ewankb/tools/extract_kb/analyze_code.py → ewankb.tools.extract_kb.analyze_code
+        rel = script_path.relative_to(EWANKB_ROOT)
+        module = str(rel.with_suffix("")).replace("/", ".")
+        cmd = [sys.executable, "-m", module]
         if extra_args:
             cmd.extend(extra_args)
         result = subprocess.run(cmd, env=env, capture_output=False)
         if result.returncode != 0:
             print(f"  WARNING: {script_path.name} exited with code {result.returncode}")
 
-    scripts = EWANKB_ROOT / "tools" / "extract_kb"
+    scripts = EWANKB_ROOT / "ewankb" / "tools" / "extract_kb"
 
     # Step 1: Auto-discover domains from backend Java code
     if skip_discover:
         print("Step 1/7: Skipped (--skip-discover)")
     else:
         print("Step 1/7: Discovering domains from backend code...")
-        from tools.discover.discover_domains import discover
+        from ewankb.tools.discover.discover_domains import discover
         discover(kb_dir, use_ai=True)
 
     # Step 2: Analyze code → code_analysis.json
@@ -363,17 +364,17 @@ def cmd_knowledgebase(skip_discover: bool = False) -> None:
     _run_script(scripts / "migrate_to_kb.py")
 
     # Cleanup empty directories
-    from tools.extract_kb.extract_to_kb import cleanup_empty_dirs
+    from ewankb.tools.extract_kb.extract_to_kb import cleanup_empty_dirs
     cleanup_empty_dirs(kb_dir / "knowledgeBase")
     cleanup_empty_dirs(kb_dir / "domains")
 
     # Update source hash cache + doc→domain mapping
-    from tools.incremental import update_hash
+    from ewankb.tools.incremental import update_hash
     result = update_hash()
     print(f"\nHash cache updated: {result['total_files']} files, {result['doc_mappings']} doc mappings")
 
     # Build BM25 index for query-kb
-    from tools.graph_runtime.bm25_index import load_or_build
+    from ewankb.tools.graph_runtime.bm25_index import load_or_build
     bm25, docs = load_or_build()
     print(f"BM25 index built: {len(docs)} documents")
 
@@ -408,13 +409,12 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 
 def cmd_build_graph() -> None:
     """Build graph.json using graphify."""
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.build_graph.graph_builder import build_graph
+    from ewankb.tools.build_graph.graph_builder import build_graph
 
     kb_dir = _resolve_kb_dir()
     os.chdir(kb_dir)
 
-    from tools import config_loader as cfg
+    from ewankb.tools import config_loader as cfg
     incremental = cfg.get_global_config().incremental
 
     print(f"Building graph (incremental={incremental})...")
@@ -522,8 +522,7 @@ def cmd_preflight(args: argparse.Namespace) -> None:
         cfg_path = target / "project_config.json"
         llm_path = target / "llm_config.json"
         if not cfg_path.exists() or not llm_path.exists():
-            sys.path.insert(0, str(EWANKB_ROOT))
-            from tools.config_loader import create_project_config, get_global_config
+            from ewankb.tools.config_loader import create_project_config, get_global_config
             gcfg = get_global_config()
             create_project_config(target, f"{target.name}业务知识库")
             result["dirs"]["project_config"] = True
@@ -543,16 +542,14 @@ def cmd_preflight(args: argparse.Namespace) -> None:
     result["counts"]["doc_files"] = len(doc_files)
 
     # ── API config ──
-    sys.path.insert(0, str(EWANKB_ROOT))
     try:
         os.environ["EWANKB_DIR"] = str(target)
-        from tools.config_loader import get_project_config, get_llm_config
-        # Reset cached config so it reads from target dir
-        import tools.config_loader as _cfg_mod
+        import ewankb.tools.config_loader as _cfg_mod
         _cfg_mod._global_cfg = None
         _cfg_mod._project_cfg = None
         _cfg_mod._llm_cfg = None
 
+        from ewankb.tools.config_loader import get_project_config, get_llm_config
         llm = get_llm_config()
         pcfg = get_project_config()
         api_key = llm.get("api_key") or pcfg.get("api_key", "")
@@ -593,12 +590,13 @@ def cmd_preflight(args: argparse.Namespace) -> None:
             blockers.append(f"no_{required_dir}")
     if not result["dirs"]["project_config"]:
         blockers.append("no_project_config")
-    if not result["dirs"]["llm_config"]:
-        blockers.append("no_llm_config")
-    if result["counts"]["java_files"] == 0:
-        blockers.append("no_java_files")
-    if not result["api"].get("key_configured"):
-        blockers.append("no_api_key")
+    if not args.query:
+        if not result["dirs"]["llm_config"]:
+            blockers.append("no_llm_config")
+        if result["counts"]["java_files"] == 0:
+            blockers.append("no_java_files")
+        if not result["api"].get("key_configured"):
+            blockers.append("no_api_key")
     result["blockers"] = blockers
     result["ready"] = len(blockers) == 0
 
@@ -640,8 +638,7 @@ def _graph_file() -> Path:
 
 def cmd_stats() -> None:
     """Show graph stats."""
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.build_graph.__main__ import _print_stats
+    from ewankb.tools.build_graph.__main__ import _print_stats
 
     gf = _graph_file()
     with open(gf, encoding="utf-8") as f:
@@ -651,9 +648,8 @@ def cmd_stats() -> None:
 
 def cmd_communities() -> None:
     """Show communities."""
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.build_graph.graph_builder import detect_communities
-    from tools.build_graph.__main__ import _print_communities
+    from ewankb.tools.build_graph.graph_builder import detect_communities
+    from ewankb.tools.build_graph.__main__ import _print_communities
 
     gf = _graph_file()
     with open(gf, encoding="utf-8") as f:
@@ -664,9 +660,8 @@ def cmd_communities() -> None:
 
 def cmd_surprising() -> None:
     """Show surprising connections."""
-    sys.path.insert(0, str(EWANKB_ROOT))
-    from tools.build_graph.graph_builder import detect_communities, find_surprising_connections
-    from tools.build_graph.__main__ import _print_surprising
+    from ewankb.tools.build_graph.graph_builder import detect_communities, find_surprising_connections
+    from ewankb.tools.build_graph.__main__ import _print_surprising
 
     gf = _graph_file()
     with open(gf, encoding="utf-8") as f:

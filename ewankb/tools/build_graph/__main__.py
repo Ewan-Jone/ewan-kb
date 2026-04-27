@@ -17,11 +17,8 @@ import sys
 import argparse
 from pathlib import Path
 
-# Add parent dir to path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from tools.build_graph import graph_builder
-from tools import config_loader as cfg
+from . import graph_builder
+from .. import config_loader as cfg
 
 
 def main() -> None:

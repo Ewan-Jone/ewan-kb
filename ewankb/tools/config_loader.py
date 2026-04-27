@@ -360,7 +360,7 @@ def create_project_config(target_dir: Path, project_name: str) -> dict:
     """Create project_config.json (metadata) and llm_config.json (LLM credentials). Returns project config dict."""
     gcfg = get_global_config()
 
-    # Load built-in stopwords from tools/discover/segment_stopwords.json
+    # Load built-in stopwords from discover/segment_stopwords.json
     stopwords_data = _load_builtin_stopwords()
 
     # project_config.json — safe to commit
@@ -393,7 +393,7 @@ def _load_builtin_stopwords() -> dict:
     import importlib.resources
     try:
         # Try reading from package data first (pip install)
-        pkg_path = Path(__file__).resolve().parent.parent / "tools" / "discover" / "segment_stopwords.json"
+        pkg_path = Path(__file__).resolve().parent / "discover" / "segment_stopwords.json"
         if pkg_path.exists():
             return json.loads(pkg_path.read_text(encoding="utf-8"))
     except Exception:

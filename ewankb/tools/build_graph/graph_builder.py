@@ -23,7 +23,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
-from tools import config_loader as cfg
+from .. import config_loader as cfg
 
 
 def build_graph(

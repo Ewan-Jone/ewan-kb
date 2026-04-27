@@ -15,8 +15,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
 from collections import defaultdict
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tools import config_loader as cfg
+from .. import config_loader as cfg
 
 REPOS = cfg.get_repos_dir()
 OUT   = cfg.get_knowledge_base_dir() / "_state" / "code_analysis.json"

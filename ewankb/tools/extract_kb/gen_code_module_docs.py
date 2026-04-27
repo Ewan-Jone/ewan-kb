@@ -15,9 +15,8 @@ import os, sys, re, json, argparse
 sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
 from datetime import datetime
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tools import config_loader as cfg
-from tools.config_loader import call_llm
+from .. import config_loader as cfg
+from ..config_loader import call_llm
 
 BASE_DIR    = cfg.get_kb_dir()
 DOMAINS_DIR = cfg.get_domains_dir()

@@ -10,9 +10,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tools import config_loader as cfg
-from tools.graph_runtime.bm25_index import load_or_build
-from tools.text_utils import tokenize
+from .. import config_loader as cfg
+from .bm25_index import load_or_build
+from ..text_utils import tokenize
 
 
 def query_kb(
@@ -20,6 +20,7 @@ def query_kb(
     max_results: int = 8,
     max_chars: int = 12000,
     domain_filter: str | None = None,
+    kb_dir: Path | None = None,
 ) -> str:
     """
     Search knowledge base documents using BM25 ranking.
@@ -31,13 +32,14 @@ def query_kb(
 
     Returns formatted text with matched document excerpts.
     """
-    kb_dir = cfg.get_kb_dir()
+    if kb_dir is None:
+        kb_dir = cfg.get_kb_dir()
 
     query_tokens = tokenize(query_text)
     if not query_tokens:
         return "(无法从查询中提取关键词)"
 
-    bm25, docs = load_or_build()
+    bm25, docs = load_or_build(kb_dir=kb_dir)
 
     if not docs:
         return "(知识库中没有文档)"

@@ -46,7 +46,7 @@ pytestmark = pytest.mark.skipif(
 
 def _reset_config_caches():
     """Reset config_loader singleton caches so EWANKB_DIR is re-read."""
-    import tools.config_loader as cfg
+    import ewankb.tools.config_loader as cfg
     cfg._global_cfg = None
     cfg._project_cfg = None
     cfg._llm_cfg = None
@@ -75,7 +75,7 @@ def _setup_kb_dir():
     os.environ["EWANKB_DIR"] = str(KB_OUTPUT_DIR)
     _reset_config_caches()
 
-    from tools.config_loader import create_project_config, get_global_config
+    from ewankb.tools.config_loader import create_project_config, get_global_config
     gcfg = get_global_config()
     create_project_config(KB_OUTPUT_DIR, "商城项目业务知识库")
 
@@ -99,7 +99,7 @@ def test_full_pipeline():
     os.environ["EWANKB_DIR"] = str(KB_OUTPUT_DIR)
     _reset_config_caches()
 
-    from tools.discover.discover_domains import discover
+    from ewankb.tools.discover.discover_domains import discover
     result = discover(KB_OUTPUT_DIR, use_ai=True)
     domain_list = result.get("domain_list", [])
     print(f"Discovered {len(domain_list)} domains: {domain_list}", flush=True)
@@ -144,7 +144,7 @@ def test_full_pipeline():
     os.environ["EWANKB_DIR"] = str(KB_OUTPUT_DIR)
     _reset_config_caches()
 
-    from tools.build_graph.graph_builder import build_graph
+    from ewankb.tools.build_graph.graph_builder import build_graph
     graph = build_graph(
         source_dir=KB_OUTPUT_DIR / "source",
         domains_dir=KB_OUTPUT_DIR / "domains",

@@ -24,12 +24,10 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-
 # ── Stopwords（从 project_config.json 读取）──────────────────────────────
 
 def _load_stopwords() -> tuple[frozenset, frozenset, frozenset]:
-    from tools.config_loader import get_segment_stopwords
+    from ..config_loader import get_segment_stopwords
     return get_segment_stopwords()
 
 _SEGMENT_STOPWORDS, _PACKAGE_WRAPPERS, _GENERIC_NOISE = _load_stopwords()
@@ -397,7 +395,7 @@ def ai_refine_domains(
     doc_titles: list[str],
 ) -> list[dict]:
     """用 AI 单次调用，将英文 segments 转为中文域名并做合并/拆分。"""
-    from tools.config_loader import call_llm
+    from ..config_loader import call_llm
 
     # 构建 segments 描述
     lines = []
@@ -570,7 +568,7 @@ def discover(kb_dir: Path, use_ai: bool = True) -> dict:
     ai_domains = None
     if use_ai:
         try:
-            from tools import config_loader as cfg
+            from .. import config_loader as cfg
             gcfg = cfg.get_global_config()
             api_key = gcfg.api_key or os.environ.get("ANTHROPIC_API_KEY", "")
             if api_key:
@@ -732,7 +730,7 @@ if __name__ == "__main__":
     parser.add_argument("--stats", action="store_true", help="查看当前 domains.json")
     args = parser.parse_args()
 
-    from tools import config_loader as cfg
+    from .. import config_loader as cfg
     kb_dir = cfg.get_kb_dir()
 
     if args.stats:

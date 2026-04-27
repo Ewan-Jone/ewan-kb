@@ -18,10 +18,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tools import config_loader as cfg
-from tools.config_loader import call_llm
-from tools.text_utils import parse_frontmatter
+from .. import config_loader as cfg
+from ..config_loader import call_llm
+from ..text_utils import parse_frontmatter
 
 # ── 路径配置 ─────────────────────────────────────────────────────────────────
 

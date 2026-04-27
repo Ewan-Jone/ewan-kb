@@ -16,8 +16,8 @@ from typing import Any
 
 from rank_bm25 import BM25Okapi
 
-from tools import config_loader as cfg
-from tools.text_utils import parse_frontmatter, tokenize
+from .. import config_loader as cfg
+from ..text_utils import parse_frontmatter, tokenize
 
 
 # ── 文档元数据 ──────────────────────────────────────────────────────────────────
@@ -35,12 +35,13 @@ class DocEntry:
 
 # ── 索引构建 ──────────────────────────────────────────────────────────────────
 
-def _collect_md_files() -> list[Path]:
+def _collect_md_files(kb_dir: Path | None = None) -> list[Path]:
     """收集所有待索引的 .md 文件。"""
-    kb_dir = cfg.get_kb_dir()
-    domains_dir = cfg.get_domains_dir()
-    knowledge_base = cfg.get_knowledge_base_dir()
-    source_docs = cfg.get_source_dir() / "docs"
+    if kb_dir is None:
+        kb_dir = cfg.get_kb_dir()
+    domains_dir = kb_dir / "domains"
+    knowledge_base = kb_dir / "knowledgeBase"
+    source_docs = kb_dir / "source" / "docs"
 
     files: list[Path] = []
 
@@ -90,9 +91,9 @@ def _parse_doc(path: Path) -> DocEntry | None:
     return DocEntry(path=path, title=title, domain=domain, doc_type=doc_type, tokens=tokens)
 
 
-def build_index() -> tuple[BM25Okapi, list[DocEntry]]:
+def build_index(kb_dir: Path | None = None) -> tuple[BM25Okapi, list[DocEntry]]:
     """扫描所有文档，构建 BM25 索引。"""
-    files = _collect_md_files()
+    files = _collect_md_files(kb_dir)
     docs: list[DocEntry] = []
 
     for f in files:
@@ -107,14 +108,16 @@ def build_index() -> tuple[BM25Okapi, list[DocEntry]]:
 
 # ── 缓存管理 ──────────────────────────────────────────────────────────────────
 
-def _cache_path() -> Path:
-    return cfg.get_knowledge_base_dir() / "_state" / "bm25_index.pkl"
+def _cache_path(kb_dir: Path | None = None) -> Path:
+    if kb_dir is None:
+        kb_dir = cfg.get_kb_dir()
+    return kb_dir / "knowledgeBase" / "_state" / "bm25_index.pkl"
 
 
-def _max_source_mtime() -> float:
+def _max_source_mtime(kb_dir: Path | None = None) -> float:
     """获取所有源 .md 文件中最大的 mtime。"""
     max_mt = 0.0
-    for f in _collect_md_files():
+    for f in _collect_md_files(kb_dir):
         try:
             mt = f.stat().st_mtime
             if mt > max_mt:
@@ -124,14 +127,14 @@ def _max_source_mtime() -> float:
     return max_mt
 
 
-def load_or_build() -> tuple[BM25Okapi, list[DocEntry]]:
+def load_or_build(kb_dir: Path | None = None) -> tuple[BM25Okapi, list[DocEntry]]:
     """加载缓存的索引，如果过期或不存在则重建。"""
-    cp = _cache_path()
+    cp = _cache_path(kb_dir)
 
     if cp.exists():
         try:
             idx_mtime = cp.stat().st_mtime
-            if _max_source_mtime() <= idx_mtime:
+            if _max_source_mtime(kb_dir) <= idx_mtime:
                 with open(cp, "rb") as f:
                     data = pickle.load(f)
                 return data["bm25"], data["docs"]
@@ -139,7 +142,7 @@ def load_or_build() -> tuple[BM25Okapi, list[DocEntry]]:
             pass
 
     # 重建
-    bm25, docs = build_index()
+    bm25, docs = build_index(kb_dir)
 
     # 缓存
     try:

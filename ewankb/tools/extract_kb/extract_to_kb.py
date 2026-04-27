@@ -30,9 +30,8 @@ from pathlib import Path
 # ============================================================
 # 配置加载（从新架构的 config_loader.py 读取）
 # ============================================================
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tools import config_loader as cfg
-from tools.config_loader import call_llm
+from .. import config_loader as cfg
+from ..config_loader import call_llm
 
 BASE_DIR       = cfg.get_kb_dir()
 SOURCE_DIR     = cfg.get_source_dir()

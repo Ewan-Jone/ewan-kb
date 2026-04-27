@@ -1,7 +1,6 @@
 """Per-KB context: wraps loaded graph, BM25 index, and config for a single knowledge base."""
 from __future__ import annotations
 
-import os
 import json
 from pathlib import Path
 from typing import Any
@@ -13,9 +12,9 @@ from rank_bm25 import BM25Okapi
 class KBContext:
     """Per-KB context holding loaded graph, BM25 index, and config.
 
-    Bypasses config_loader's singleton by temporarily setting EWANKB_DIR
-    and clearing caches during init. After init, all data is held in this
-    object and config_loader is no longer consulted for queries.
+    Loads configs by reading JSON files directly from kb_dir for project config,
+    and using the global (user-wide) config_loader for global settings.
+    No EWANKB_DIR env manipulation or config cache resets needed.
     """
 
     def __init__(self, kb_dir: Path) -> None:
@@ -31,30 +30,19 @@ class KBContext:
     def _load_config(self) -> None:
         """Load global + project config for this KB dir.
 
-        Temporarily sets EWANKB_DIR and resets config_loader caches
-        so it reads from the correct KB directory.
+        Global config is user-wide (from ~/.config/ewankb/ewankb.toml), not KB-specific.
+        Project config is KB-specific — read directly from kb_dir/project_config.json.
         """
-        import tools.config_loader as cfg
+        from ewankb.tools.config_loader import get_global_config
 
-        old_env = os.environ.get("EWANKB_DIR", "")
-        os.environ["EWANKB_DIR"] = str(self.kb_dir)
+        self.gcfg = get_global_config()
 
-        # Reset all cached configs
-        cfg._global_cfg = None
-        cfg._project_cfg = None
-        cfg._llm_cfg = None
-
-        self.gcfg = cfg.get_global_config()
-        self.pcfg = cfg.get_project_config()
-
-        # Restore env (other KBs may need different values)
-        if old_env:
-            os.environ["EWANKB_DIR"] = old_env
+        pcfg_path = self.kb_dir / "project_config.json"
+        if pcfg_path.exists():
+            with open(pcfg_path, encoding="utf-8") as f:
+                self.pcfg = json.load(f)
         else:
-            os.environ.pop("EWANKB_DIR", None)
-        cfg._global_cfg = None
-        cfg._project_cfg = None
-        cfg._llm_cfg = None
+            self.pcfg = {}
 
     def load_graph(self) -> None:
         """Load graph.json and build NetworkX DiGraph for this KB."""
@@ -71,24 +59,9 @@ class KBContext:
 
     def load_bm25(self) -> None:
         """Build or load BM25 index for this KB."""
-        import tools.config_loader as cfg
-        from tools.graph_runtime.bm25_index import load_or_build
+        from ewankb.tools.graph_runtime.bm25_index import load_or_build
 
-        old_env = os.environ.get("EWANKB_DIR", "")
-        os.environ["EWANKB_DIR"] = str(self.kb_dir)
-        cfg._global_cfg = None
-        cfg._project_cfg = None
-        cfg._llm_cfg = None
-
-        self.bm25, self.docs = load_or_build()
-
-        if old_env:
-            os.environ["EWANKB_DIR"] = old_env
-        else:
-            os.environ.pop("EWANKB_DIR", None)
-        cfg._global_cfg = None
-        cfg._project_cfg = None
-        cfg._llm_cfg = None
+        self.bm25, self.docs = load_or_build(kb_dir=self.kb_dir)
 
     def query_graph(
         self,
@@ -102,47 +75,35 @@ class KBContext:
 
         Returns rendered text (if verbose=False) or structured dict (if verbose=True).
         """
-        from tools.graph_runtime.query_engine import (
+        from ewankb.tools.graph_runtime.query_engine import (
             query as _query,
             query_graph_json as _query_graph_json,
         )
-        import tools.config_loader as cfg
-
-        old_env = os.environ.get("EWANKB_DIR", "")
-        os.environ["EWANKB_DIR"] = str(self.kb_dir)
-        cfg._global_cfg = None
-        cfg._project_cfg = None
-        cfg._llm_cfg = None
 
         if traversal is None:
             traversal = self.gcfg.default_traversal
         if max_nodes is None:
             max_nodes = self.gcfg.max_nodes
 
-        try:
-            if verbose:
-                return _query_graph_json(
-                    query_text,
-                    traversal=traversal,
-                    max_nodes=max_nodes,
-                    verbose=True,
-                )
-            if max_tokens is None:
-                max_tokens = self.gcfg.default_max_tokens
-            return _query(
+        if verbose:
+            return _query_graph_json(
                 query_text,
+                graph_file=self.kb_dir / "graph" / "graph.json",
                 traversal=traversal,
                 max_nodes=max_nodes,
-                max_tokens=max_tokens,
+                verbose=True,
+                gcfg=self.gcfg,
             )
-        finally:
-            if old_env:
-                os.environ["EWANKB_DIR"] = old_env
-            else:
-                os.environ.pop("EWANKB_DIR", None)
-            cfg._global_cfg = None
-            cfg._project_cfg = None
-            cfg._llm_cfg = None
+        if max_tokens is None:
+            max_tokens = self.gcfg.default_max_tokens
+        return _query(
+            query_text,
+            graph_file=self.kb_dir / "graph" / "graph.json",
+            traversal=traversal,
+            max_nodes=max_nodes,
+            max_tokens=max_tokens,
+            gcfg=self.gcfg,
+        )
 
     def query_kb(
         self,
@@ -152,30 +113,15 @@ class KBContext:
         domain_filter: str | None = None,
     ) -> str:
         """Search knowledge base documents using BM25."""
-        from tools.graph_runtime.kb_query import query_kb as _query_kb
-        import tools.config_loader as cfg
+        from ewankb.tools.graph_runtime.kb_query import query_kb as _query_kb
 
-        old_env = os.environ.get("EWANKB_DIR", "")
-        os.environ["EWANKB_DIR"] = str(self.kb_dir)
-        cfg._global_cfg = None
-        cfg._project_cfg = None
-        cfg._llm_cfg = None
-
-        try:
-            return _query_kb(
-                query_text,
-                max_results=max_results,
-                max_chars=max_chars,
-                domain_filter=domain_filter,
-            )
-        finally:
-            if old_env:
-                os.environ["EWANKB_DIR"] = old_env
-            else:
-                os.environ.pop("EWANKB_DIR", None)
-            cfg._global_cfg = None
-            cfg._project_cfg = None
-            cfg._llm_cfg = None
+        return _query_kb(
+            query_text,
+            max_results=max_results,
+            max_chars=max_chars,
+            domain_filter=domain_filter,
+            kb_dir=self.kb_dir,
+        )
 
     def preflight(self) -> dict[str, Any]:
         """Run preflight check for this KB, returning structured result.

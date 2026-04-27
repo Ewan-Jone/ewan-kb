@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ewankb.context import KBContext
 
-from tools.graph_runtime.query_engine import (
+from ewankb.tools.graph_runtime.query_engine import (
     query,
     query_graph_json,
     load_graph,
@@ -15,9 +15,9 @@ from tools.graph_runtime.query_engine import (
     get_neighbors,
 )
 
-from tools.graph_runtime.kb_query import query_kb
+from ewankb.tools.graph_runtime.kb_query import query_kb
 
-from tools.graph_runtime.bm25_index import load_or_build, DocEntry
+from ewankb.tools.graph_runtime.bm25_index import load_or_build, DocEntry
 
 __all__ = [
     "KBContext",

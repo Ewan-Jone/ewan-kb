@@ -20,8 +20,8 @@ import networkx as nx
 from pathlib import Path
 from typing import Any
 
-from tools import config_loader as cfg
-from tools.text_utils import tokenize
+from .. import config_loader as cfg
+from ..text_utils import tokenize
 
 
 # ── Graph loading ────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ def score_nodes(G: nx.DiGraph, query: str) -> list[tuple[str, float]]:
     """
     query_keywords = tokenize(query)
     if not query_keywords:
-        query_keywords = list({w.lower() for w in re.findall(r"\w{3,}", query.lower())})
+        query_keywords = list(dict.fromkeys(w.lower() for w in re.findall(r"\w{3,}", query.lower())))
 
     type_weights = {
         "function": 1.5,
@@ -179,9 +179,11 @@ def subgraph_to_text(
     max_chars: int,
     show_node_type: bool = True,
     show_trust: bool = False,
+    gcfg: Any | None = None,
 ) -> str:
     """Render visited subgraph to readable text within char budget."""
-    gcfg = cfg.get_global_config()
+    if gcfg is None:
+        gcfg = cfg.get_global_config()
     if max_chars <= 0:
         max_chars = gcfg.default_max_tokens * gcfg.chars_per_token
     if show_node_type:
@@ -274,6 +276,7 @@ def query(
     traversal: str | None = None,
     max_nodes: int | None = None,
     max_tokens: int | None = None,
+    gcfg: Any | None = None,
 ) -> str:
     """
     Full query pipeline: score → traverse → render.
@@ -281,7 +284,8 @@ def query(
     Returns rendered subgraph as readable text.
     """
     graph_data, G = load_graph(graph_file)
-    gcfg = cfg.get_global_config()
+    if gcfg is None:
+        gcfg = cfg.get_global_config()
 
     if traversal is None:
         traversal = gcfg.default_traversal
@@ -310,6 +314,7 @@ def query(
         G, visited, graph_data, max_chars,
         show_node_type=gcfg.show_node_type,
         show_trust=gcfg.show_trust_tags,
+        gcfg=gcfg,
     )
 
 
@@ -319,6 +324,7 @@ def query_graph_json(
     traversal: str | None = None,
     max_nodes: int | None = None,
     verbose: bool = False,
+    gcfg: Any | None = None,
 ) -> dict[str, Any]:
     """
     Full query pipeline returning structured JSON.
@@ -328,7 +334,8 @@ def query_graph_json(
     import time
 
     graph_data, G = load_graph(graph_file)
-    gcfg = cfg.get_global_config()
+    if gcfg is None:
+        gcfg = cfg.get_global_config()
 
     if traversal is None:
         traversal = gcfg.default_traversal or "bfs"
@@ -344,7 +351,7 @@ def query_graph_json(
     query_keywords = tokenize(query_text)
     used_jieba = bool(query_keywords)
     if not query_keywords:
-        query_keywords = list({w.lower() for w in re.findall(r"\w{3,}", query_text.lower())})
+        query_keywords = list(dict.fromkeys(w.lower() for w in re.findall(r"\w{3,}", query_text.lower())))
 
     result: dict[str, Any] = {
         "query_analysis": {

@@ -22,8 +22,7 @@ from datetime import datetime
 import pymysql
 import pymysql.cursors
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tools import config_loader as cfg
+from .. import config_loader as cfg
 
 # ── 输出目录 ──────────────────────────────────────────────────────────────────
 
