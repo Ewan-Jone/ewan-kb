@@ -20,7 +20,7 @@ trigger: /ewankb-query
 ### 1. 定位知识库 + 自动拉取
 
 ```bash
-ewankb preflight --dir .
+ewankb preflight --query --dir .
 ```
 
 解析 JSON：`kb_dir` 是知识库路径。
@@ -68,7 +68,7 @@ ewankb preflight --dir .
 ### 3A. Graph 模式（仅图谱）
 
 ```bash
-ewankb query "用户问题" --json
+ewankb query "用户问题" --json --dir "{kb_dir}"
 ```
 
 如果 `ewankb` 命令不可用，请先运行 `pip install ewankb`。
@@ -106,7 +106,7 @@ ewankb query "用户问题" --json
 ### 3B. KB 模式（仅文档）
 
 ```bash
-ewankb query-kb "用户问题"
+ewankb query-kb "用户问题" --dir "{kb_dir}"
 ```
 
 如果高分文档内容被截断，用 Read 工具读取完整内容后再回答。
@@ -118,10 +118,10 @@ ewankb query-kb "用户问题"
 用 Agent 工具**并行**启动两个 subagent（同一条消息）：
 
 **Subagent A（graph）**：
-> 在 {kb_dir} 执行 `ewankb query "{问题}"`，分析结果（涉及哪些节点、边、域）。
+> 执行 `ewankb query "{问题}" --dir "{kb_dir}"`，分析结果（涉及哪些节点、边、域）。
 
 **Subagent B（kb）**：
-> 在 {kb_dir} 执行 `ewankb query-kb "{问题}"`，对高分文档用 Read 工具读取完整内容，分析结果。
+> 执行 `ewankb query-kb "{问题}" --dir "{kb_dir}"`，对高分文档用 Read 工具读取完整内容，分析结果。
 
 **对比 + 歧义处理**：
 - 两路结果一致 → 合并汇总回答
