@@ -66,6 +66,7 @@ def main() -> None:
 
     query_p = sub.add_parser("query", help="Query the knowledge graph")
     query_p.add_argument("text", type=str, help="Query text")
+    query_p.add_argument("--dir", type=str, help="Knowledge base directory (default: current dir or EWANKB_DIR)")
     query_p.add_argument("--traversal", choices=["bfs", "dfs"])
     query_p.add_argument("--depth", type=int, help="Max traversal depth")
     query_p.add_argument("--max-tokens", type=int, help="Max output tokens")
@@ -75,6 +76,7 @@ def main() -> None:
 
     qg_p = sub.add_parser("query-graph", help="Query via knowledge graph (alias for query)")
     qg_p.add_argument("text", type=str, help="Query text")
+    qg_p.add_argument("--dir", type=str, help="Knowledge base directory (default: current dir or EWANKB_DIR)")
     qg_p.add_argument("--traversal", choices=["bfs", "dfs"])
     qg_p.add_argument("--depth", type=int, help="Max traversal depth")
     qg_p.add_argument("--max-tokens", type=int, help="Max output tokens")
@@ -84,6 +86,7 @@ def main() -> None:
 
     qkb_p = sub.add_parser("query-kb", help="Query knowledge base directly (domains + knowledgeBase + source)")
     qkb_p.add_argument("text", type=str, help="Query text")
+    qkb_p.add_argument("--dir", type=str, help="Knowledge base directory (default: current dir or EWANKB_DIR)")
     qkb_p.add_argument("--domain", type=str, help="Filter by domain")
     qkb_p.add_argument("--max-results", type=int, default=8, help="Max documents to return")
 
@@ -434,6 +437,18 @@ def cmd_query(args: argparse.Namespace) -> None:
     """Query the graph."""
     from ewankb.query import query, query_graph_json
 
+    if getattr(args, 'dir', None):
+        kb_dir = Path(args.dir).resolve()
+        os.environ["EWANKB_DIR"] = str(kb_dir)
+        # Reset config caches so they pick up the new EWANKB_DIR
+        import ewankb.tools.config_loader as _cfg_mod
+        _cfg_mod._global_cfg = None
+        _cfg_mod._project_cfg = None
+        _cfg_mod._llm_cfg = None
+        graph_file = kb_dir / "graph" / "graph.json"
+    else:
+        graph_file = None
+
     traversal = args.traversal
     if args.depth and not traversal:
         traversal = "bfs"
@@ -450,6 +465,7 @@ def cmd_query(args: argparse.Namespace) -> None:
     if args.json:
         result = query_graph_json(
             args.text,
+            graph_file=graph_file,
             traversal=traversal,
             max_nodes=max_nodes,
             verbose=args.verbose,
@@ -458,6 +474,7 @@ def cmd_query(args: argparse.Namespace) -> None:
     else:
         result = query(
             args.text,
+            graph_file=graph_file,
             traversal=traversal,
             max_nodes=max_nodes,
             max_tokens=args.max_tokens,
@@ -471,6 +488,14 @@ def cmd_query(args: argparse.Namespace) -> None:
 def cmd_query_kb(args: argparse.Namespace) -> None:
     """Query the knowledge base directly."""
     from ewankb.query import query_kb
+
+    if getattr(args, 'dir', None):
+        kb_dir = Path(args.dir).resolve()
+        os.environ["EWANKB_DIR"] = str(kb_dir)
+        import ewankb.tools.config_loader as _cfg_mod
+        _cfg_mod._global_cfg = None
+        _cfg_mod._project_cfg = None
+        _cfg_mod._llm_cfg = None
 
     result = query_kb(
         args.text,

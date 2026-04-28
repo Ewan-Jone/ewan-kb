@@ -145,7 +145,9 @@ Service 类之间的跨域 import（如 OrderService → ProductService, Payment
 | `ewankb diff` | 检测 `source/` 变更 |
 | `ewankb rebuild` | 清空生成产物，做一次干净重建 |
 | `ewankb query <text>` | 图谱查询 |
+| `ewankb query <text> --dir /path/to/kb` | 图谱查询（指定知识库目录） |
 | `ewankb query-kb <text>` | 文档检索 |
+| `ewankb query-kb <text> --dir /path/to/kb` | 文档检索（指定知识库目录） |
 | `ewankb graph-stats` | 图谱统计 |
 | `ewankb communities` | 查看社区聚类 |
 | `ewankb config --show` | 查看当前配置 |
