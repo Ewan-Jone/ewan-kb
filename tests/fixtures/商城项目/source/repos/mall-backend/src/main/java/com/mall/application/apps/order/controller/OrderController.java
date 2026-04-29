@@ -1,5 +1,6 @@
 package com.mall.application.apps.order.controller;
 
+import com.mall.application.apps.order.OrderApi;
 import com.mall.application.apps.order.service.OrderService;
 import com.mall.application.apps.order.dto.OrderDTO;
 import com.mall.application.apps.order.entity.OrderEntity;
@@ -11,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
  * 提供订单创建、详情查询、取消等接口
  */
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping(OrderApi.BASE)
 public class OrderController {
 
     @Autowired
@@ -20,7 +21,7 @@ public class OrderController {
     /**
      * 创建订单
      */
-    @PostMapping
+    @PostMapping(OrderApi.CREATE)
     public OrderDTO createOrder(@RequestBody OrderEntity orderEntity) {
         return orderService.createOrder(orderEntity);
     }
@@ -36,7 +37,7 @@ public class OrderController {
     /**
      * 取消订单
      */
-    @PutMapping("/{orderId}/cancel")
+    @PutMapping(OrderApi.CANCEL)
     public OrderDTO cancelOrder(@PathVariable String orderId) {
         return orderService.cancelOrder(orderId);
     }

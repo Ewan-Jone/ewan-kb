@@ -293,8 +293,10 @@ def _collect_tables_for_segment(repos_dir: Path, segment: str, modules: list[str
     return sorted(set(tables))[:20]
 
 
-def _collect_endpoints_for_segment(repos_dir: Path, segment: str) -> list[str]:
-    """收集与某 segment 相关的 REST 端点。"""
+def _collect_endpoints_for_segment(repos_dir: Path, segment: str, java_constants: dict[str, str] | None = None) -> list[str]:
+    """收集与某 segment 相关的 REST 端点。支持常量引用和拼接。"""
+    if java_constants is None:
+        java_constants = {}
     endpoints = []
     for jf in repos_dir.rglob("*.java"):
         path_str = str(jf).replace("\\", "/")
@@ -304,14 +306,52 @@ def _collect_endpoints_for_segment(repos_dir: Path, segment: str) -> list[str]:
             content = jf.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        class_maps = re.findall(r'@RequestMapping\(["\']([^"\']+)["\']', content)
-        class_prefix = class_maps[0] if class_maps else ""
-        method_maps = re.findall(
-            r'@(Get|Post|Put|Delete|Request)Mapping\(["\']([^"\']+)["\']', content,
+
+        # Extract class-level @RequestMapping (string literal or constant)
+        class_prefix = ""
+        class_rm_str = re.findall(r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', content)
+        if class_rm_str:
+            class_prefix = class_rm_str[0]
+        else:
+            class_rm_const = re.findall(r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?(\w+\.\w+)\s*\)', content)
+            if class_rm_const:
+                class_prefix = java_constants.get(class_rm_const[0], "")
+
+        # Extract method-level mappings (string literal or constant)
+        method_maps_str = re.findall(
+            r'@(Get|Post|Put|Delete|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', content,
         )
-        for method, path in method_maps:
-            full = (class_prefix + path).replace("//", "/")
+        for method, path in method_maps_str:
+            # 路径可能已经是完整路径（以 /api 开头），避免重复拼接
+            if class_prefix and path.startswith("/api"):
+                full = path
+            elif class_prefix:
+                full = (class_prefix + "/" + path).replace("//", "/")
+            else:
+                full = path
             endpoints.append(f"[{method.upper()}] {full}")
+
+        method_maps_const = re.findall(
+            r'@(Get|Post|Put|Delete|Request)Mapping\s*\(\s*(?:value\s*=\s*)?(\w+\.\w+)\s*\)', content,
+        )
+        for method, const_ref in method_maps_const:
+            resolved = java_constants.get(const_ref, "")
+            if not resolved:
+                continue
+            # 常量值可能已包含 class_prefix，避免重复拼接
+            if class_prefix and resolved.startswith(class_prefix):
+                full = resolved
+            elif class_prefix:
+                full = (class_prefix + "/" + resolved).replace("//", "/")
+            else:
+                full = resolved
+            endpoints.append(f"[{method.upper()}] {full}")
+
+        # Bare annotations (no path) with class prefix
+        bare = re.findall(r'@(Get|Post|Put|Delete)Mapping\s*\(\s*\)', content)
+        if bare and class_prefix:
+            endpoints.append(f"[REQUEST] {class_prefix}")
+
     return list(dict.fromkeys(endpoints))[:20]
 
 
@@ -562,6 +602,10 @@ def discover(kb_dir: Path, use_ai: bool = True) -> dict:
         print("  警告: 未从代码中发现任何域 segment，将使用默认域 'uncategorized'")
         segments = {"uncategorized": {"file_count": 0, "sample_files": []}}
 
+    # 解析 Java 常量（用于端点路径的常量引用）
+    from ..extract_kb.enrich_kb import resolve_java_endpoint_constants
+    java_constants = resolve_java_endpoint_constants(repos_dir)
+
     print(f"  发现 {len(segments)} 个候选域: {', '.join(segments.keys())}")
 
     # Step 2: AI 微调 or 退化
@@ -569,8 +613,8 @@ def discover(kb_dir: Path, use_ai: bool = True) -> dict:
     if use_ai:
         try:
             from .. import config_loader as cfg
-            gcfg = cfg.get_global_config()
-            api_key = gcfg.api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+            llm_cfg = cfg._resolve_llm_config()
+            api_key = llm_cfg.get("api_key", "")
             if api_key:
                 print("发现域: AI 微调中（中文命名 + 合并/拆分）...")
                 doc_titles = scan_doc_titles(docs_dir)
@@ -600,7 +644,7 @@ def discover(kb_dir: Path, use_ai: bool = True) -> dict:
             if key in segments:
                 total_files += segments[key]["file_count"]
                 tables = _collect_tables_for_segment(repos_dir, key, [])
-                endpoints = _collect_endpoints_for_segment(repos_dir, key)
+                endpoints = _collect_endpoints_for_segment(repos_dir, key, java_constants)
                 all_tables.extend(tables)
                 all_endpoints.extend(endpoints)
                 all_modules.extend(segments[key].get("module_dirs", []))

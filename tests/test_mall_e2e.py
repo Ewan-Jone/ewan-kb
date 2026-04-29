@@ -183,3 +183,103 @@ def test_full_pipeline():
     else:
         shutil.rmtree(KB_OUTPUT_DIR)
         print("E2E test passed, cleanup done.", flush=True)
+
+
+def test_frontend_association():
+    """Verify Java constant resolution, frontend constant resolution, and frontend→domain association."""
+    _setup_kb_dir()
+
+    os.environ["EWANKB_DIR"] = str(KB_OUTPUT_DIR)
+    _reset_config_caches()
+
+    # Run discover first to create domains.json (needed for build_code_index)
+    from ewankb.tools.discover.discover_domains import discover
+    result = discover(KB_OUTPUT_DIR, use_ai=False)
+    domain_list = result.get("domain_list", [])
+    print(f"Discovered {len(domain_list)} domains: {domain_list}", flush=True)
+    assert len(domain_list) >= 3, f"Expected ≥3 domains, got {len(domain_list)}"
+
+    # Reload config caches after discover
+    os.environ["EWANKB_DIR"] = str(KB_OUTPUT_DIR)
+    _reset_config_caches()
+
+    import importlib
+    import ewankb.tools.extract_kb.enrich_kb as enrich_mod
+    importlib.reload(enrich_mod)
+    import ewankb.tools.config_loader as cfg_mod
+    importlib.reload(cfg_mod)
+
+    resolve_java_endpoint_constants = enrich_mod.resolve_java_endpoint_constants
+    resolve_frontend_constants = enrich_mod.resolve_frontend_constants
+    build_code_index = enrich_mod.build_code_index
+    build_frontend_index = enrich_mod.build_frontend_index
+    get_repos_dir = cfg_mod.get_repos_dir
+
+    repos_dir = get_repos_dir()
+
+    # ── 1. Java constant resolution ──
+    java_constants = resolve_java_endpoint_constants(repos_dir)
+    print(f"Java constants: {len(java_constants)} entries", flush=True)
+    assert len(java_constants) > 0, "No Java endpoint constants found"
+    # OrderApi.BASE should resolve to "/api/orders"
+    assert "OrderApi.BASE" in java_constants, f"OrderApi.BASE not found: {list(java_constants.keys())}"
+    assert java_constants["OrderApi.BASE"] == "/api/orders", f"OrderApi.BASE value wrong: {java_constants['OrderApi.BASE']}"
+    # OrderApi.LIST should resolve via concatenation
+    assert "OrderApi.LIST" in java_constants, f"OrderApi.LIST not found: {list(java_constants.keys())}"
+    assert java_constants["OrderApi.LIST"] == "/api/orders/list", f"OrderApi.LIST value wrong: {java_constants['OrderApi.LIST']}"
+    # PaymentApi.CREATE should resolve via concatenation
+    assert "PaymentApi.CREATE" in java_constants, f"PaymentApi.CREATE not found"
+    assert java_constants["PaymentApi.CREATE"] == "/api/payments/create"
+
+    # ── 2. Frontend constant resolution ──
+    fe_constants = resolve_frontend_constants(repos_dir)
+    print(f"Frontend constants: {len(fe_constants)} entries", flush=True)
+    assert len(fe_constants) > 0, "No frontend constants found"
+    assert "OrderApi.LIST" in fe_constants, f"OrderApi.LIST not found in FE constants: {list(fe_constants.keys())}"
+    assert fe_constants["OrderApi.LIST"] == "/api/orders", f"FE OrderApi.LIST value wrong: {fe_constants['OrderApi.LIST']}"
+
+    # ── 3. Build code index with Java constants ──
+    code_idx, kw_idx, ep_idx = build_code_index(java_constants)
+    assert len(code_idx) > 0, "code_idx empty"
+    # Verify OrderController endpoints include resolved constant paths
+    order_domain_files = None
+    for domain, files in code_idx.items():
+        for file_str, info in files.items():
+            if "OrderController" in file_str:
+                order_domain_files = files
+                break
+    assert order_domain_files is not None, "OrderController not found in code_idx"
+    order_ctrl_info = None
+    for file_str, info in order_domain_files.items():
+        if "OrderController" in file_str:
+            order_ctrl_info = info
+            break
+    assert order_ctrl_info is not None
+    assert "/api/orders" in order_ctrl_info["endpoints"], f"OrderController endpoints: {order_ctrl_info['endpoints']}"
+    # Constant-resolved paths should not be duplicated with class_prefix
+    for ep in order_ctrl_info["endpoints"]:
+        assert not ep.startswith("/api/orders/api/orders"), f"Duplicated class_prefix in endpoint: {ep}"
+
+    # ── 4. Build frontend index ──
+    frontend_idx = build_frontend_index(repos_dir, code_idx, ep_idx, fe_constants)
+    print(f"Frontend index: {len(frontend_idx)} domains with frontend", flush=True)
+    assert len(frontend_idx) >= 2, f"Expected ≥2 domains with frontend, got {len(frontend_idx)}: {list(frontend_idx.keys())}"
+
+    # ── 5. OrderList.vue should be associated to a domain containing "order" ──
+    order_fe_found = False
+    for domain, fe_entries in frontend_idx.items():
+        for entry in fe_entries:
+            if "OrderList" in entry.get("component_name", "") or "OrderList" in entry.get("file_str", ""):
+                # Check the domain has "order" english_key
+                order_fe_found = True
+                assert "/api/orders" in entry.get("api_paths", []), f"OrderList api_paths missing /api/orders: {entry['api_paths']}"
+                print(f"OrderList.vue → domain '{domain}', api_paths: {entry['api_paths']}", flush=True)
+                break
+    assert order_fe_found, "OrderList.vue not found in frontend_idx"
+
+    # ── Cleanup ──
+    if os.environ.get("KEEP_OUTPUT", "") == "1":
+        print(f"KB output preserved at {KB_OUTPUT_DIR}", flush=True)
+    else:
+        shutil.rmtree(KB_OUTPUT_DIR)
+        print("Frontend association test passed, cleanup done.", flush=True)

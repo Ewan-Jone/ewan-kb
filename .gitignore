@@ -4,6 +4,7 @@ graph/
 
 # ── 用户原始数据快照（从外部拉取覆盖，不提交到开源仓库）───────────────────
 source/
+!tests/fixtures/*/source/
 
 # ── 工具运行时产物（用户 KB 目录下的 _state/）──────────────────────────────
 # 状态文件现在存放在 knowledgeBase/_state/ 和 graph/.cache/ 下

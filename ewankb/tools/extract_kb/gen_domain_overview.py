@@ -346,7 +346,9 @@ def prune_empty_domains() -> list[str]:
     return pruned
 
 
-def gen_domain_readme(domain: str) -> None:
+def gen_domain_readme(domain: str, frontend_idx: dict | None = None) -> None:
+    if frontend_idx is None:
+        frontend_idx = {}
     # domain 是域路径字符串，如 "合同管理" 或 "物流订单/订舱管理"
     domain_dir = DOMAINS_DIR / domain
 
@@ -454,6 +456,14 @@ updated: {TODAY}
         sections.append("\n".join(service_md))
         sections.append("\n")
 
+    # 前端代码模块
+    fe_entries = frontend_idx.get(domain, [])
+    if fe_entries:
+        sections.append("\n## 前端代码模块\n")
+        for e in fe_entries:
+            api_str = ", ".join(e.get("api_paths", [])[:3])
+            sections.append(f"- `{e['file_str']}` — API: {api_str}\n")
+
     if table_md:
         sections.append("\n## 数据库表结构\n")
         sections.append("\n".join(table_md))
@@ -496,13 +506,36 @@ def main():
             domain_dir.mkdir(parents=True, exist_ok=True)
         log(f"生成: {args.domain}")
         try:
-            gen_domain_readme(args.domain)
+            # 单域模式也需要前端索引
+            from .enrich_kb import (
+                resolve_java_endpoint_constants,
+                resolve_frontend_constants,
+                build_code_index,
+                build_frontend_index,
+            )
+            java_constants = resolve_java_endpoint_constants(REPOS)
+            fe_constants = resolve_frontend_constants(REPOS)
+            code_idx_for_fe, _, ep_idx_for_fe = build_code_index(java_constants)
+            frontend_idx = build_frontend_index(REPOS, code_idx_for_fe, ep_idx_for_fe, fe_constants)
+            gen_domain_readme(args.domain, frontend_idx)
         except Exception as e:
             log(f"  [失败] {args.domain}: {e}")
         return
 
     # 裁剪空域（无代码无文档的幽灵域直接删除）
     prune_empty_domains()
+
+    # 构建前端→域关联索引
+    from .enrich_kb import (
+        resolve_java_endpoint_constants,
+        resolve_frontend_constants,
+        build_code_index,
+        build_frontend_index,
+    )
+    java_constants = resolve_java_endpoint_constants(REPOS)
+    fe_constants = resolve_frontend_constants(REPOS)
+    code_idx_for_fe, _, ep_idx_for_fe = build_code_index(java_constants)
+    frontend_idx = build_frontend_index(REPOS, code_idx_for_fe, ep_idx_for_fe, fe_constants)
 
     # 扫描所有域（从 domains.json 获取，不依赖目录遍历）
     all_domains = cfg.get_domains()
@@ -517,7 +550,7 @@ def main():
             continue
         log(f"  [{i}/{len(target_domains)}] 生成: {domain}")
         try:
-            gen_domain_readme(domain)
+            gen_domain_readme(domain, frontend_idx)
         except Exception as e:
             log(f"    [失败] {domain}: {e}")
 
