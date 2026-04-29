@@ -1,5 +1,5 @@
 # Ewan-kb package
-__version__ = "0.1.5"
+__version__ = "0.1.9"
 
 
 def __getattr__(name):
