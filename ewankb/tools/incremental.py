@@ -163,11 +163,13 @@ def map_changes_to_domains(changes: dict, dirs: dict) -> set[str]:
     all_domains = domains_data.get("domains", {})
 
     # 构建 module→domain 反向映射
-    # AI 编辑 modules 字段时可能写入尾部斜杠，rstrip 规范化。
+    # AI 编辑 modules 字段时可能写入尾部斜杠或 Windows 反斜杠，统一规范化。
     module_to_domains: dict[str, list[str]] = {}
     for domain_name, info in all_domains.items():
         for mod in info.get("modules", []):
-            module_to_domains.setdefault(mod.rstrip("/"), []).append(domain_name)
+            module_to_domains.setdefault(
+                mod.replace("\\", "/").rstrip("/"), []
+            ).append(domain_name)
 
     # 代码变更 → 域
     # 从文件路径的多级前缀匹配 domain modules：逐级向上尝试目录路径，
@@ -374,10 +376,10 @@ def clean_domain_outputs(domains: set[str], dirs: dict) -> dict:
                         keys_to_remove.append(key)
                         break
 
-            # code_module progress: key=domain_name/module_name
+            # code_module progress: key format "code:{domain}:{module}"
             elif step_name == "code_module":
                 for domain in domains:
-                    if key.startswith(domain + "/") or key == domain:
+                    if key == f"code:{domain}" or key.startswith(f"code:{domain}:"):
                         keys_to_remove.append(key)
                         break
 

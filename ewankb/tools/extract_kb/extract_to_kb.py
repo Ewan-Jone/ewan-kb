@@ -487,7 +487,7 @@ def print_stats():
     errors   = load_json(ERRORS_FILE)
     all_files = build_file_list()
     total     = len(all_files)
-    done      = sum(1 for v in progress.values() if v == "done")
+    done      = sum(1 for v in progress.values() if isinstance(v, str) and v not in ("", "error"))
     err       = sum(1 for v in progress.values() if v == "error")
     pending   = total - done - err
     print(f"总计: {total}  |  已完成: {done}  |  失败: {err}  |  待处理: {pending}")
