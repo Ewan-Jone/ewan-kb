@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 知识库内容提炼脚本
-从 confluence_data 中读取文档，用 Claude API 提炼后写入 knowledgeBase 目录
+从 source/docs/ 递归读取所有 .md 文档，用 LLM 提炼后写入 domains/ 目录
 
 特性：
   - 断点续传：progress.json 记录每个文件的处理状态，重跑自动跳过已完成
@@ -93,11 +93,10 @@ def _build_prompts() -> dict[str, str]:
 
 输出格式要求：
 1. 文件开头必须有 YAML frontmatter（用 --- 包裹），字段：
-   - id: req-{{page_id}}
    - domain: 判断所属业务域（选项：{domains_str}）
    {_type_instruction}
    - title: 从文档中提取功能名称
-   - source: Page ID {{page_id}}
+   - source: {{filename}}
    - status: active
    - updated: {{today}}
 2. 正文按以下结构提炼（跳过无内容的部分）：
@@ -120,7 +119,7 @@ def _build_prompts() -> dict[str, str]:
    （如有测试信息：测试场景、正反例、边界条件）
 
 3. 重点提炼"业务规则"，这是知识库最有价值的部分
-4. 去除：截图占位、分支名称、开发人员名字、版本历史表、Confluence 格式噪声
+4. 去除：截图占位、分支名称、开发人员名字、版本历史表、格式噪声
 
 原始文档内容：
 {{content}}""",
@@ -130,11 +129,10 @@ def _build_prompts() -> dict[str, str]:
 
 输出格式要求：
 1. 文件开头必须有 YAML frontmatter（用 --- 包裹），字段：
-   - id: rule-{{page_id}}
    - domain: 判断所属业务域（选项：{domains_str}）
    {_type_instruction}
    - title: 规则主题
-   - source: Page ID {{page_id}}
+   - source: {{filename}}
    - status: active
    - updated: {{today}}
 2. 正文：以编号列表形式列出所有业务规则，每条规则要自洽、可理解
@@ -147,11 +145,10 @@ def _build_prompts() -> dict[str, str]:
 
 输出格式要求：
 1. 文件开头必须有 YAML frontmatter（用 --- 包裹），字段：
-   - id: doc-{{page_id}}
    - domain: 判断所属业务域（选项：{domains_str}）
    {_type_instruction}
    - title: 从内容提取主题
-   - source: Page ID {{page_id}}
+   - source: {{filename}}
    - status: active
    - updated: {{today}}
 2. 正文：保留所有有价值的业务知识（规则/流程/字段定义/约束/变更记录），去除格式噪声
@@ -226,16 +223,11 @@ def classify_by_name(name: str) -> tuple[str, str]:
     return doc_type, biz_domain
 
 
-def extract_page_id(filename: str) -> str:
-    m = re.match(r"^(\d+)_", filename)
-    return m.group(1) if m else "unknown"
-
-
-def get_output_path(biz_domain: str, doc_type: str, page_id: str, title_slug: str) -> Path:
+def get_output_path(biz_domain: str, doc_type: str, title_slug: str) -> Path:
     domain_type_dir = DOMAINS_DIR / biz_domain / doc_type
     domain_type_dir.mkdir(parents=True, exist_ok=True)
     safe_slug = re.sub(r'[\\/:*?"<>|]', "_", title_slug)[:60]
-    return domain_type_dir / f"{page_id}_{safe_slug}.md"
+    return domain_type_dir / f"{safe_slug}.md"
 
 
 def clean_output(output: str) -> str:
@@ -312,26 +304,28 @@ def get_source_dir() -> Path:
 
 
 def build_file_list() -> list[dict]:
-    """扫描源文档目录，过滤空文件，返回待处理列表。"""
+    """扫描源文档目录（递归子目录），过滤空文件，返回待处理列表。"""
     source_dir = get_source_dir()
     files = []
-    for fname in sorted(os.listdir(source_dir)):
-        if not fname.endswith(".md"):
+    for fpath in sorted(source_dir.rglob("*.md")):
+        if not fpath.is_file():
             continue
-        fpath = source_dir / fname
+        # 跳过 .cache 等隐藏目录
+        if any(p.startswith(".") for p in fpath.relative_to(source_dir).parts):
+            continue
         size = fpath.stat().st_size
         if size < EMPTY_SIZE:
             continue
-        name_no_id = re.sub(r"^\d+_", "", fname[:-3])  # strip id_ and .md
-        page_id = extract_page_id(fname)
-        doc_type, biz_domain = classify_by_name(name_no_id)
+        fname = fpath.name
+        rel_path = fpath.relative_to(source_dir)
+        name = fname[:-3]  # strip .md
+        doc_type, biz_domain = classify_by_name(name)
         files.append({
             "filename":   fname,
-            "page_id":    page_id,
-            "name":       name_no_id,
+            "rel_path":   str(rel_path).replace("\\", "/"),
+            "name":       name,
             "doc_type":   doc_type,
             "biz_domain": biz_domain,
-            "rel_path":   fpath.relative_to(source_dir),
         })
     return files
 
@@ -348,12 +342,12 @@ _shared_errors: dict = {}
 def _process_one(item: dict, client, today: str) -> dict:
     """处理单个文件，返回结果 dict。"""
     fname      = item["filename"]
-    page_id    = item["page_id"]
+    rel_path   = item["rel_path"]
     name       = item["name"]
     doc_type   = item["doc_type"]
     biz_domain = item["biz_domain"]
 
-    fpath = get_source_dir() / fname
+    fpath = get_source_dir() / rel_path
     raw = fpath.read_text(encoding="utf-8")
     content = raw[:8000] if len(raw) > 8000 else raw
 
@@ -361,7 +355,7 @@ def _process_one(item: dict, client, today: str) -> dict:
     prompt_key  = doc_type if doc_type in prompts else "其他"
     prompt_tmpl = prompts[prompt_key]
     prompt      = prompt_tmpl.format(
-        page_id = page_id,
+        filename = fname,
         content = content,
         today   = today,
     )
@@ -372,17 +366,19 @@ def _process_one(item: dict, client, today: str) -> dict:
         actual_doctype = extract_doctype_from_output(output, doc_type or "其他")
         title          = extract_title_from_output(output, name)
 
-        out_path = get_output_path(actual_domain, actual_doctype, page_id, title)
+        out_path = get_output_path(actual_domain, actual_doctype, title)
         out_path.write_text(output, encoding="utf-8")
 
         result = {
             "filename": fname,
+            "rel_path": rel_path,
             "status": "done",
             "out_path": f"{actual_domain}/{actual_doctype}/{out_path.name}",
         }
     except Exception as e:
         result = {
             "filename": fname,
+            "rel_path": rel_path,
             "status": "error",
             "error": f"{type(e).__name__}: {e}",
         }
@@ -422,12 +418,14 @@ def process_files(retry_errors: bool = False):
     all_files = build_file_list()
     total     = len(all_files)
 
+    # 使用 rel_path 作为进度 key（而非 filename），
+    # 以支持子目录下可能有同名文件。
     if retry_errors:
-        to_run = [f for f in all_files if f["filename"] in _shared_errors]
+        to_run = [f for f in all_files if f["rel_path"] in _shared_errors]
         log(f"重试模式：共 {len(to_run)} 个失败文件")
     else:
         to_run = [f for f in all_files
-                  if not _is_truly_done(_shared_progress.get(f["filename"], ""))]
+                  if not _is_truly_done(_shared_progress.get(f["rel_path"], ""))]
         done_count = total - len(to_run)
         log(f"共 {total} 个文件，已完成 {done_count}，待处理 {len(to_run)}（并行 {_get_parallel_workers()} workers）")
 
@@ -445,20 +443,20 @@ def process_files(retry_errors: bool = False):
 
         for future in as_completed(futures):
             result = future.result()
-            fname  = result["filename"]
+            key    = result["rel_path"]
 
             with _progress_lock:
                 if result["status"] == "done":
-                    _shared_progress[fname] = result["out_path"]
-                    if fname in _shared_errors:
-                        del _shared_errors[fname]
+                    _shared_progress[key] = result["out_path"]
+                    if key in _shared_errors:
+                        del _shared_errors[key]
                     done_count += 1
-                    log(f"  [OK] {fname[:55]} -> {result['out_path']}")
+                    log(f"  [OK] {key[:55]} -> {result['out_path']}")
                 else:
-                    _shared_progress[fname] = "error"
-                    _shared_errors[fname] = {"error": result["error"], "time": today}
+                    _shared_progress[key] = "error"
+                    _shared_errors[key] = {"error": result["error"], "time": today}
                     err_count += 1
-                    log(f"  [FAIL] {fname[:55]}: {result['error'][:80]}")
+                    log(f"  [FAIL] {key[:55]}: {result['error'][:80]}")
 
                 # 每 5 个文件保存一次进度（平衡 IO 与安全性）
                 if (done_count + err_count) % 5 == 0:
