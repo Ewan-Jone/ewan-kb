@@ -104,10 +104,13 @@ def analyze_all() -> dict:
         return {}
 
     # 从 domains.json 收集所有模块名
+    # AI 编辑 modules 字段时可能按目录惯例写入尾部斜杠（如 "module/"），
+    # 规范化去掉，否则下游拼接 "/" + module + "/" 会变成双斜杠，无法匹配文件路径。
     domains_data = cfg._load_domains_json()
     all_modules = set()
     for info in domains_data.get("domains", {}).values():
-        all_modules.update(info.get("modules", []))
+        for m in info.get("modules", []):
+            all_modules.add(m.rstrip("/"))
 
     if not all_modules:
         print("domains.json 中无模块信息，跳过代码分析")

@@ -145,7 +145,6 @@ def _find_module_root(rel_path: str) -> str | None:
     for i, p in enumerate(parts):
         if p == "src" and i + 2 < len(parts) and parts[i + 1] == "main" and parts[i + 2] == "java":
             return "/".join(parts[:i])
-    # 如果没有标准 Maven 结构，取前两级
     if len(parts) > 2:
         return "/".join(parts[:2])
     return None
@@ -164,22 +163,52 @@ def map_changes_to_domains(changes: dict, dirs: dict) -> set[str]:
     all_domains = domains_data.get("domains", {})
 
     # 构建 module→domain 反向映射
+    # AI 编辑 modules 字段时可能写入尾部斜杠，rstrip 规范化。
     module_to_domains: dict[str, list[str]] = {}
     for domain_name, info in all_domains.items():
         for mod in info.get("modules", []):
-            module_to_domains.setdefault(mod, []).append(domain_name)
+            module_to_domains.setdefault(mod.rstrip("/"), []).append(domain_name)
 
     # 代码变更 → 域
+    # 从文件路径的多级前缀匹配 domain modules：逐级向上尝试目录路径，
+    # 最精确匹配优先，兜底回退到 Maven 模块根。这样当 domains.json 中
+    # modules 字段经过 AI 细化后包含具体子路径时，能精确命中；未细化时
+    # 回退到粗粒度的模块根匹配（保守但正确）。
     for rel_path in (changes["repos"]["added"] + changes["repos"]["modified"] + changes["repos"]["deleted"]):
+        # Directory path (drop filename) for multi-level prefix matching
+        dir_path = "/".join(rel_path.split("/")[:-1])
+        dir_parts = dir_path.split("/")
+        matched = False
+        for prefix_len in range(len(dir_parts), 0, -1):
+            prefix = "/".join(dir_parts[:prefix_len])
+            if prefix in module_to_domains:
+                affected.update(module_to_domains[prefix])
+                matched = True
+                break
+            for mod_key, domains in module_to_domains.items():
+                # 文件目录在模块路径之下（或等于），才算命中。
+                # 不反向匹配：模块路径是父目录时文件不应匹配，
+                # 例如 common/util 不应匹配到 apps/order 模块。
+                if prefix == mod_key or prefix.startswith(mod_key + "/"):
+                    affected.update(domains)
+                    matched = True
+                    break
+            if matched:
+                break
+
+        if matched:
+            continue
+
+        # Fallback: Maven module root matching (coarse-grained)
+        # 只做 mod_root 在 mod_key 之下或相等的匹配。不反向：mod_root 是
+        # 公共祖先时不应命中所有子模块，否则 common/util 会误匹配所有域。
         mod_root = _find_module_root(rel_path)
         if mod_root:
-            # 精确匹配
             if mod_root in module_to_domains:
                 affected.update(module_to_domains[mod_root])
             else:
-                # 前缀匹配：模块路径可能是 module_to_domains 中某个路径的前缀或子路径
                 for mod_key, domains in module_to_domains.items():
-                    if mod_root.startswith(mod_key + "/") or mod_key.startswith(mod_root + "/") or mod_key == mod_root:
+                    if mod_root == mod_key or mod_root.startswith(mod_key + "/"):
                         affected.update(domains)
 
     # 文档变更 → 域（通过反向映射）

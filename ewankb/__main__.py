@@ -16,6 +16,9 @@ Usage:
     ewankb graph-stats          Show graph statistics
     ewankb communities          Show detected communities
     ewankb surprising           Show surprising cross-domain connections
+    ewankb diff                 Detect source changes and show affected domains
+    ewankb update               Incremental update: rebuild affected domains only
+    ewankb rebuild              Delete all generated artifacts for a clean rebuild
     ewankb config --edit        Edit project_config.json
     ewankb config --edit-llm    Edit llm_config.json (API credentials)
 """
@@ -43,6 +46,7 @@ from .cli.query_cmd import run as _run_query
 from .cli.query_cmd import run_kb as _run_query_kb
 from .cli.preflight_cmd import run as _run_preflight
 from .cli.diff_cmd import run as _run_diff
+from .cli.update_cmd import run as _run_update
 from .cli.rebuild_cmd import run as _run_rebuild
 from .cli.install_cmd import run as _run_install
 from .cli.config_cmd import run as _run_config
@@ -60,6 +64,7 @@ def cmd_query(args): return _run_query(args)
 def cmd_query_kb(args): return _run_query_kb(args)
 def cmd_preflight(args): return _run_preflight(args)
 def cmd_diff(): return _run_diff(Namespace())
+def cmd_update(): return _run_update(Namespace())
 def cmd_rebuild(): return _run_rebuild(Namespace())
 def cmd_install(): return _run_install(Namespace())
 def cmd_config(args): return _run_config(args)
@@ -129,6 +134,7 @@ def main() -> None:
     pf_p.add_argument("--query", action="store_true", help="Skip LLM-related checks (no_llm_config, no_api_key)")
 
     sub.add_parser("diff", help="Detect source changes and show affected domains")
+    sub.add_parser("update", help="Incremental update: detect changes, rebuild affected domains only")
     sub.add_parser("rebuild", help="Delete all generated artifacts (domains/, knowledgeBase/, graph/, source/.cache/) for a clean rebuild")
     sub.add_parser("install", help="Install ewankb skills to Claude Code")
 
@@ -183,6 +189,8 @@ def _dispatch(args):
         _run_preflight(args)
     elif cmd == "diff":
         _run_diff(args)
+    elif cmd == "update":
+        _run_update(args)
     elif cmd == "rebuild":
         _run_rebuild(args)
     elif cmd == "install":
