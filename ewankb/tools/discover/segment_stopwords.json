@@ -16,7 +16,9 @@
       "com", "org", "io", "java", "src", "main", "test",
       "resources", "static", "public", "private", "internal", "external",
       "generated", "auto", "default", "none", "null", "void",
-      "encrypt", "smf", "framework", "cache"
+      "encrypt", "smf", "framework", "cache",
+      "resp", "req", "web", "constant", "generator", "mobile",
+      "enum", "exceptions", "annotation", "aspectj", "bean", "aop"
     ]
   },
 
